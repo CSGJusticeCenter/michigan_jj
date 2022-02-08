@@ -1,1 +1,1 @@
-# jj_michigan
+# michigan_jj
