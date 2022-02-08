@@ -1,0 +1,1228 @@
+---
+title: "jj_michigan_placement_cleaning"
+author: "Andrew Byrum"
+date: "October/November 2021"
+output: 
+    html_document:
+        df_print: paged
+        toc: true
+        toc_float: true
+---
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","tidylog","distill","fuzzyjoin")
+```
+
+```{r include=FALSE}
+### pull in michigan data from second data transfer -- transferred on 12/15
+read_excel_allsheets <- function(filename) { 
+  sheets <- readxl::excel_sheets(filename) 
+  x <- lapply(sheets, function(X) readxl::read_excel(filename, sheet = X)) 
+  names(x) <- sheets 
+  x 
+} 
+
+### create list of all files we want -- all .xlsx files in project data folder
+mi_placement_data <- list.files(path = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\", 
+                     pattern = "*CSG_JJ_01-01-2015 through 12-31-2020_121321.xlsx",
+                     full.names = TRUE)
+
+### lapply function over list of files we want to import
+list_of_mi_placement_tabs <- lapply(mi_placement_data, read_excel_allsheets)
+
+### assign names from iowa_files to list_of_ticket_dataframes
+names(list_of_mi_placement_tabs) <- janitor::make_clean_names(basename(mi_placement_data))
+
+### convert lists to tibbles -- we still have lists of lists, though
+list2env(list_of_mi_placement_tabs, envir=.GlobalEnv) 
+
+### convert list to separate dataframes with clean names
+names(csg_jj_01_01_2015_through_12_31_2020_121321_xlsx) <- janitor::make_clean_names(names(csg_jj_01_01_2015_through_12_31_2020_121321_xlsx))
+
+list2env(csg_jj_01_01_2015_through_12_31_2020_121321_xlsx,envir=.GlobalEnv) 
+
+### remove original list of dataframes from environment
+rm(list=ls(pattern="csg_jj_01_01_2015_through_12_31_2020_121321_xlsx"))
+
+### here are the data tables that mdhhs has updated and that (theoretically) we no longer need:
+# legal_details, placements, assessments, cases
+# they have also provided a new 
+```
+
+```{r include=FALSE}
+### here are the data tables that mdhhs has updated and that (theoretically) we no longer need:
+# legal_details, placements, assessments, cases
+# they have also provided a new data table -- added_program_history
+
+### pull in updated michigan data -- transferred on 1/19
+### create list of all files we want -- all .xlsx files in project data folder
+mi_placement_data <- list.files(path = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\", 
+                     pattern = "*REQ 26252 CSG JJ Data Sharing Agreement 01-14-2022.xlsx",
+                     full.names = TRUE)
+
+### lapply function over list of files we want to import
+list_of_mi_placement_tabs <- lapply(mi_placement_data, read_excel_allsheets)
+
+### assign names from iowa_files to list_of_ticket_dataframes
+names(list_of_mi_placement_tabs) <- janitor::make_clean_names(basename(mi_placement_data))
+
+### convert lists to tibbles -- we still have lists of lists, though
+list2env(list_of_mi_placement_tabs, envir=.GlobalEnv) 
+
+### convert list to separate dataframes with clean names
+names(req_26252_csg_jj_data_sharing_agreement_01_14_2022_xlsx) <- janitor::make_clean_names(names(req_26252_csg_jj_data_sharing_agreement_01_14_2022_xlsx))
+
+list2env(req_26252_csg_jj_data_sharing_agreement_01_14_2022_xlsx,envir=.GlobalEnv) 
+
+### remove original list of dataframes from environment
+rm(list=ls(pattern="req_26252_csg_jj_data_sharing_agreement_01_14_2022_xlsx"))
+```
+
+```{r include=FALSE}
+### join all files together using data table diagram as visual guide using left join, starting with child_details -- our base demo file
+ 
+###### de-dup child_details using PERSON_ID
+child_details %<>%
+  distinct(PERSON_ID,.keep_all = TRUE) ### file already unique by PERSON_ID; no records dropped 
+
+###### de-dup placements using all columns
+placements <- new_placements %<>%
+  distinct(.,.keep_all = TRUE) %>% 
+  mutate(PLACEMENT_BEGIN_DATE = ymd(PLACEMENT_BEGIN_DATE))### file already unique; no pure duplicates and no records dropped 
+
+### inner join placements to child_details -- dropping records from child_details with no matching placement data
+child_details_placements <- inner_join(child_details, placements, by = "PERSON_ID")
+
+### IGNORE incidents FOR NOW -- NEED TO CLEAN + PIVOT WIDE BEFORE MERGING; MAY NEED TO ANALYZE SEPARATELY -- NOT JOINED TO MAIN ANALYTIC FILE AS I NEED TO EXPLORE HOW AND IF WE CAN JOIN INCIDENTS TO SPECIFIC PLACEMENTS + CASES
+
+###### de-dup incidents using all columns
+incidents %<>%
+  distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped
+
+### join incidents to child_details to obtain race/ethnicity and gender -- may eventually need to join to placement data in order to calculate incidents per placements by facility and facility type, though
+child_details_incidents <- inner_join(child_details, incidents, by = c("PERSON_ID"))
+
+### create three lists for dual, state, and county wards with the corresponding legal_status codes 
+dual_ward_status_list <- c("52 - MCI Ward/44 and Act 150/46","90 - Temp Court Ward 42 and Delinquent Court Ward 40","91 -  Perm Court Ward 41 and Delinquent Court Ward 40","92 - Temp Court Ward 42 and Act 150/46","93 - Perm Court Ward 41 and Act 150/46","94 - MCI Ward/44 and Delinquent Court Ward/40","80 - In Home 42 and Delinquent Court Ward 40","82 - In Home 42 and Act 150/46")
+
+state_ward_status_list <- c("40 - Court Ward Delinquent","44 - State Ward ' MCI - Act 220/296", "46 - State Ward - Delinquent - Act 150","50 - Non-Ward With a Delinquent Petition Filed")
+
+county_ward_status_list <- c()
+
+###### de-dup legal_status using all columns
+###### for legal statuses with same start date (n = 120ish), I keep the legal status with the longer window of time between start and end date (using censured end date which is: The end date of the child's legal status and, if none, the end of the period under study.)
+### code legal_status into three groups: dual ward, state ward, and county ward
+legal_details <- new_legal_details %>%
+  distinct(.,.keep_all = TRUE) %>% ### file already unique; no pure duplicates and no records dropped
+  mutate(LEGAL_STATUS_BEGIN = ymd(LEGAL_STATUS_BEGIN),
+         CENSURED_STATUS_END = ymd(CENSURED_STATUS_END),
+         legal_status_begin_end_diff_days = time_length(difftime(CENSURED_STATUS_END, LEGAL_STATUS_BEGIN), unit = 'days')) %>% 
+  arrange(PERSON_ID,LEGAL_STATUS_BEGIN,desc(legal_status_begin_end_diff_days)) %>% 
+  distinct(PERSON_ID,LEGAL_STATUS_BEGIN, .keep_all=TRUE) %>% 
+  clean_names() %>% 
+  mutate(legal_status_unique_id = paste0(person_id,legal_status_begin,legal_status)) %>% 
+  mutate(legal_status_ward_flag = case_when(
+    legal_status %in% state_ward_status_list ~ 1,
+    legal_status %in% dual_ward_status_list ~ 2,
+    legal_status %in% county_ward_status_list ~ 3,
+    TRUE ~ as.numeric(NA)),
+    legal_status_ward_flag = factor(legal_status_ward_flag,
+         levels = c(1,2,3),
+         labels = c("State Ward","Dual Ward", "County Ward"))) ### use factor function to assign labels to values
+
+# ### join legal_status to child_details_placements_incidents
+# child_details_placements_incidents_legal <- left_join(child_details_placements_incidents, legal_status, by = "PERSON_ID")
+
+# ###### de-dup case_plans using all columns
+# case_plans %<>%
+#   distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+# 
+# ###### de-dup offenses using all columns
+# offenses %<>%
+#   distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+
+### NOTE: SKIPPING OFFENSE DATA FOR NOW AS WE WAIT FOR MISACWIS ID TO BE ADDED TO LATEST OFFENSE DATA
+
+### join offense to case_plans to attach MiSACWIS CASE ID to each offense; joining separately from jj_assessments as we have to de-dup differently in each scenario; right join to keep all offenses records and only records from case_plans which match -- but prefer to have case_plans records as first columns (so right join)
+# case_plans_offense <- right_join(case_plans,offenses,by = c("PERSON_ID","MiSACWIS_CASE_ID")) %>% 
+#   distinct(PERSON_ID,MiSACWIS_CASE_ID,CHARGED_OFFENSE_DATE,CHARGED_OFFENSE,FINAL_OFFENSE_MCL_CODE,.keep_all = TRUE) %>% ### offenses are duplicated over CASE_PLAN_ID since we're joining on c("PERSON_ID","MiSACWIS_CASE_ID"); de-dup to keep one unique charge per PERSON_ID/MiSACWIS_CASE_ID
+#   dplyr::select(-c(CASE_PLAN_ID,PLAN_DATE,PLAN_TYPE)) %>% ### only merging with case_plans to join offense data to misacwis id
+#   group_by(PERSON_ID,MiSACWIS_CASE_ID) %>% ### pivot wide by PERSON_ID,MiSACWIS_CASE_ID (spreading charge data wide)
+#   mutate(col_name=paste0("charge_num",'_',row_number())) %>%
+#   ungroup() %>% 
+#   pivot_wider(id_cols = c(PERSON_ID,MiSACWIS_CASE_ID), names_from = col_name, values_from = CHARGED_OFFENSE_DATE:REFERRING_OFFENSE_IND, values_fill = NA) %>% 
+#   dplyr::select(where(~!all(is.na(.x))))
+
+# ### join case_plans_offense to child_details_placements_incidents_legal
+# child_details_placements_offense <- left_join(child_details_placements, case_plans_offense, by = "PERSON_ID")
+
+###### de-dup jj_assessments using all columns
+jj_assessments <- new_assessments %<>%
+  distinct(.,.keep_all = TRUE) %>% 
+  mutate(ASSESSMENT_DATE = as.Date(as.numeric(ASSESSMENT_DATE), "1899-12-30"),
+         ASSESSMENT_DATE = ymd(ASSESSMENT_DATE)) ### file already unique; no pure duplicates and no records dropped 
+
+### create assessments file with only dispositional assessment data -- we'll just focus on these data in analysis
+jj_assessments_disposition <- jj_assessments %>% 
+  filter(ASSESSMENT_TYPE=="DISPOSITIONAL ASSESSMENT")
+
+###### fuzzy join of child_details_placements and jj_assessments -- using match_fun to specify that the assessment date must be less than or equal to the placement date -- if this doesn't work, just match on dispositional assessments, keep <= placement date, calculate days to placement, and only keep smallest one
+jj_assessments_placement <- 
+  fuzzy_left_join(child_details_placements,jj_assessments_disposition,
+                  by = c("PERSON_ID" = "PERSON_ID",
+                         "PLACEMENT_BEGIN_DATE" = "ASSESSMENT_DATE"),
+                  match_fun = list(`==`, `>=`)) %>% 
+  mutate(assessment_placement_diff = time_length(difftime(PLACEMENT_BEGIN_DATE, ASSESSMENT_DATE), unit = 'days'),
+         assessment_placement_diff_less_548 = ifelse(assessment_placement_diff<=548,1,0)) %>% ### calculate time between assessment and placement; using 548 as a year a half delineator -- in part b/c some youth are given risk assessment in the middle of a longer placement (at least as it appears in the data) and this would allow the risk data to more consistently be linked to the following placement
+   mutate_at(vars(ASSESSMENT_TYPE:assessment_placement_diff_less_548),
+       funs(replace(., assessment_placement_diff_less_548 == 0, NA))) %>%   ### recode all assessment data with assessment data/placement date differences larger than 548 days to NA
+  dplyr::rename(PERSON_ID = PERSON_ID.x) %>% 
+  dplyr::select(-PERSON_ID.y) %>% ### keep person_id from child_details_placements
+  arrange(PERSON_ID,PROVIDER_ID,PLACEMENT_BEGIN_DATE,PLACE_NO,assessment_placement_diff) %>% ### when there are duplicates, we are keeping the record with the smallest `assessment_placement_diff` value (the assessment closest to the placement date)
+  distinct(PERSON_ID,PROVIDER_ID,PLACEMENT_BEGIN_DATE,PLACE_NO, .keep_all=TRUE) ### de-dup by unique placement; record count should now match original record count in placement data file
+
+### until we receive and validate 'placement episode ID' from MDHHS, i am creating my own placement episode rank variable to associate placements that occur continuously from those separated by more than 15 days; the current MDHHS data ranks all placements in youth's file -- making it difficult to separately group, for example, two continuous placements in a youth's early childhood from three continuous placements in that youth's teens
+### they are working to provide us with a 'placement episode ID' which should theoretically fix this issue, btw it's TBD
+### placement_episode_segment ranks the placement episodes for a given kid (three separate periods of continuous placements would be 1,2,3 respectively for each unique placement within the episode)
+### placement_episode_no ranks the unique placements within each placement episode
+### create place_no_of_earliest_disposition_assess to note the earliest placement within an episode for which there is an assessment
+### create disposition_risk_level_earliest to note the risk level associated with the earliest assessment within an episode
+jj_assessments_placement_ordered <- jj_assessments_placement %>% 
+  group_by(PERSON_ID) %>%
+  # arrange(PERSON_ID,PLACEMENT_BEGIN_DATE) %>%
+  mutate(next_placement_begin_date = PLACEMENT_BEGIN_DATE[PLACE_NO = PLACE_NO + 1],
+         next_placement_begin_date_diff = time_length(difftime(next_placement_begin_date,PLACEMENT_END_DATE), unit = 'days'),
+         next_placement_begin_date_diff_more_than_15 = ifelse((next_placement_begin_date_diff>15 | is.na(next_placement_begin_date)==TRUE),PLACE_NO,0),
+         start_new_placement_episode_flag = ifelse(lag(next_placement_begin_date_diff_more_than_15) > 0, 1, 0),
+         start_new_placement_episode_flag = ifelse(is.na(start_new_placement_episode_flag)==TRUE, 0, start_new_placement_episode_flag),
+         placement_episode_segment_manual_count = cumsum(c(TRUE,diff(start_new_placement_episode_flag)==1))) %>%
+  ungroup() %>%
+  group_by(PERSON_ID,placement_episode_segment_manual_count) %>%
+  arrange(PERSON_ID,placement_episode_segment_manual_count,PLACEMENT_BEGIN_DATE) %>%
+  mutate(placement_episode_no_manual_count = order(PLACEMENT_BEGIN_DATE)) %>%
+  ungroup() %>%
+  group_by(PERSON_ID,PLCMNT_EPISODE_ID) %>%
+  arrange(PERSON_ID,PLCMNT_EPISODE_ID,PLACEMENT_BEGIN_DATE) %>%
+  mutate(placement_episode_no = order(PLACEMENT_BEGIN_DATE),
+         placement_episode_final_end_date = PLACEMENT_END_DATE[placement_episode_no == max(placement_episode_no)],
+         placement_episode_first_start_date = PLACEMENT_BEGIN_DATE[placement_episode_no == min(placement_episode_no)]) %>%
+  ungroup() %>% 
+  group_by(PERSON_ID) %>%
+  arrange(PERSON_ID,PLCMNT_EPISODE_ID,placement_episode_first_start_date) %>% 
+  mutate(placement_episode_segment = dense_rank(placement_episode_first_start_date)) %>% 
+  ungroup() %>% 
+  group_by(PERSON_ID,PLCMNT_EPISODE_ID) %>%
+  mutate(place_no_of_earliest_disposition_assess = ifelse(!is.na(DISP_FINAL_RISK_LEVEL)==TRUE, min(placement_episode_no[!is.na(DISP_FINAL_RISK_LEVEL)==TRUE]),NA),
+         place_no_of_earliest_disposition_assess = min(place_no_of_earliest_disposition_assess[!is.na(place_no_of_earliest_disposition_assess)==TRUE]),
+         disposition_risk_level_earliest = DISP_FINAL_RISK_LEVEL[min(place_no_of_earliest_disposition_assess)]) %>% 
+  ungroup()
+
+### join legal_details to jj_assessments_placement via 'legal_status_begin' ==(or is close to?) 'placement_begin_date'
+### MDHHS suggested joining on legal status window (start to end date) as opposed to just start date, but for now I think we just need the legal status at the start of each placement episode
+### however, not all placements have associated legal statuses
+jj_assessments_placement_legal_status <- left_join(jj_assessments_placement_ordered,legal_details,
+                                                   by = c("PERSON_ID" = "person_id",
+                                                          "LEGAL_STATUS_INFO_ID" = "legal_status_info_id"))
+
+###### de-dup jj_assessments using all columns
+jj_program_history <- added_program_history %<>%
+  distinct(.,.keep_all = TRUE) %>% 
+  filter(CASE_CLOSURE_REASON!="Created In Error") ### file already unique; no pure duplicates and no records dropped; drop records created in error 
+
+jj_assessments_placement_legal_status %<>%
+  mutate(PLACEMENT_BEGIN_DATE_DUP = PLACEMENT_BEGIN_DATE)
+
+### join jj_program_history to jj_assessments_placement_legal_status via 'PROG_BEGIN_DATE' ==(or is close to?) 'placement_begin_date'
+### MDHHS suggested joining on legal status window (start to end date) as opposed to just start date, but for now I think we just need the legal status at the start of each placement episode
+### however, not all placements have associated legal statuses
+# jj_assessments_placement_legal_status_history <- fuzzy_left_join(jj_assessments_placement_legal_status,jj_program_history,
+#                                                    by = c("PERSON_ID" = "PERSON_ID",
+#                                                           "PLACEMENT_BEGIN_DATE" = "PROG_BEGIN_DATE",
+#                                                           "PLACEMENT_BEGIN_DATE_DUP" = "PROG_BEGIN_DATE"),
+#                                                    match_fun = list(`==`, `>=`, `<`)) %>%
+#   mutate(prog_history_placement_diff = abs(time_length(difftime(PLACEMENT_BEGIN_DATE, PROG_BEGIN_DATE), unit = 'days'))) %>%
+#   arrange(person_id,placement_episode_segment,placement_episode_no,prog_history_placement_diff) %>%
+#   distinct(person_id,placement_episode_segment,placement_episode_no, .keep_all=TRUE) ### de-dup by unique placement, keeping duplicate placement with legal status that is closest to start of placement
+# 
+# ####START HERE -- keeping closest program history type above and setting rules for what to keep below
+# assessment_placement_diff_less_45 = ifelse(assessment_placement_diff<=45,1,0)) %>% ### calculate time between assessment and placement; using 
+#    mutate_at(vars(ASSESSMENT_TYPE:assessment_placement_diff_less_45),
+#        funs(replace(., assessment_placement_diff_less_45 == 0, NA))) %>%   ### recode all assessment data with assessment data/placement date differences larger than 45 days to NA; double check this number as the maximum time between assessment and placement with MDHHS
+#   
+#   mutate(placement_no_jj_program = ifelse(PROGRAM_TYPE=="Juvenile Justice",
+#                                                 placement_episode_no,NA)) %>%
+#   group_by(PERSON_ID,PLCMNT_EPISODE_ID) %>%
+#   arrange(PERSON_ID,PLACEMENT_BEGIN_DATE) %>%
+#   mutate(placement_first_jj_in_episode_flag = ifelse(PROGRAM_TYPE=="Juvenile Justice",
+#                                                 placement_episode_no,NA),
+#          placement_no_first_jj_in_episode = min(placement_first_jj_in_episode_flag, na.rm = TRUE),
+#          episode_contains_jj_placement = max(placement_first_jj_in_episode_flag, na.rm = TRUE),
+#          placement_episode_ends_past_study = ifelse(is.na(placement_episode_final_end_date)==TRUE,1,0)) %>%
+#   ungroup()
+
+# huh <- left_join(jj_assessments_placement_ordered,jj_program_history,
+#                                                    by = c("PERSON_ID" = "PERSON_ID",
+#                                                           "PLACEMENT_BEGIN_DATE" = "PROG_BEGIN_DATE")) %>% 
+#   group_by(PERSON_ID) %>% 
+#   mutate(placement_first_jj_in_episode_flag = ifelse(!is.na(PROGRAM_TYPE)==TRUE,
+#                                                 1,0)) %>% 
+#   ungroup() %>% 
+#   group_by(PERSON_ID,PLCMNT_EPISODE_ID) %>% 
+#   mutate(episode_contains_jj_placement = max(placement_first_jj_in_episode_flag, na.rm = TRUE)) %>% 
+#   distinct(PERSON_ID,PLCMNT_EPISODE_ID,.keep_all=TRUE) %>% 
+#   mutate(year=year(ymd(placement_episode_first_start_date)))
+
+# broadening joining requirements to join any legal_status_begin that occurred before a placement to that placement so long as the legal_status_end date is after the placement_begin_date; essentially we're joining all legal statuses to placements that occurred in the window between the start and end of the legal status range
+# jj_assessments_placement_legal_status <-
+ # fuzzy_left_join(jj_assessments_placement,legal_details,
+ #                  by = c("PERSON_ID" = "person_id",
+ #                         "PLACEMENT_BEGIN_DATE" = "legal_status_begin",
+ #                         "PLACEMENT_BEGIN_DATE" = "censured_status_end"),
+ #                  match_fun = list(`==`, `>=`, `<`)) %>%
+ #  mutate(legal_status_placement_diff = abs(time_length(difftime(PLACEMENT_BEGIN_DATE, legal_status_begin), unit = 'days'))) %>%
+ #  arrange(person_id,placement_episode_segment,placement_episode_no,legal_status_placement_diff) %>%
+ #  distinct(person_id,placement_episode_segment,placement_episode_no, .keep_all=TRUE) ### de-dup by unique placement, keeping duplicate placement with legal status that is closest to start of placement
+
+### join jj_assessments and case_plans first to remove unnecessary records (most of the case plan records -- which just state multiple different case plan for each case, but no further detail); right join to keep all jj_assessments records and only records from case_plans which match -- but prefer to have case_plans records as first columns (so right join)
+# case_plans_jj <- right_join(case_plans,jj_assessments, by = c("PERSON_ID","CASE_PLAN_ID")) %>% 
+#   filter(!is.na(RISK_LEVEL)==TRUE) ### drop all records with missing risk level data; these are records that had a case plan entry but no jj_assessment or offense data attached to that case plan record (for our purposes, these case plan records are not necessary)
+
+# ### join jj_assessments to child_details_placements_incidents_legal_case; using full join as not all columns from case_plan will match, but we don't want duplicate column names
+# child_details_placements_offense_assess <- full_join(child_details_placements, case_plans_jj, by = c("PERSON_ID","MiSACWIS_CASE_ID"))
+
+### IGNORE ACADEMIC EVALUATIONS FOR NOW -- NEED TO CLEAN + PIVOT WIDE BEFORE MERGING
+
+###### de-dup academic_evaluations using all columns
+# academic_evaluations %<>%
+#   distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+# 
+# ### join academic_evaluations to child_details_placements_incidents_legal_offense_assess
+# child_details_placements_offense_assess_acad <- left_join(child_details_placements_offense_assess, academic_evaluations, by = c("PERSON_ID"))
+```
+
+```{r include=FALSE}
+### clean dates, create race/ethnicity var with both four and six values, and create sex flag
+jj_assessments_placement_legal_status_clean <- jj_assessments_placement_legal_status %>% 
+  clean_names() %>% 
+  mutate(birth_dt = ymd(birth_dt),
+         assessment_date = ymd(assessment_date),
+         removal_date = ymd(removal_date),
+         discharge_date = ymd(discharge_date),
+         placement_begin_date = ymd(placement_begin_date),
+         placement_end_date = ymd(placement_end_date),
+         placement_begin_date_year = year(placement_begin_date),
+         placement_end_date_year = year(placement_end_date),
+         age_placement_start = time_length(difftime(placement_begin_date, birth_dt), "years")) %>% 
+  group_by(person_id,placement_episode_segment) %>% 
+  mutate(placement_episode_begin_date = placement_begin_date[min(placement_episode_no)],
+         placement_episode_end_date = placement_end_date[max(placement_episode_no)],
+         placement_episode_start_year = placement_begin_date_year[min(placement_episode_no)],
+         placement_episode_end_year = placement_end_date_year[max(placement_episode_no)]) %>% 
+  ungroup() %>% 
+  filter(age_placement_start<21) %>% ### using this as additional data check -- got number from soleil -- confirm
+  mutate(race_csg_4 = case_when(
+    multi_race=="Black/African American" & hispanic_latino_ind!="YES" ~ 1,
+    hispanic_latino_ind=="YES" ~ 2,
+    multi_race=="White" & hispanic_latino_ind!="YES" ~ 3,
+    multi_race %in% c("American Indian/Alaskan Native","White, American Indian/Alaskan Native","American Indian/Alaskan Native, Native Hawaiian/Other Pacific Islander") ~ 4,
+    multi_race %in% c("Asian","Black/African American, American Indian/Alaskan Native","Black/African American, Asian","Black/African American, Native Hawaiian/Other Pacific Islander","Native Hawaiian/Other Pacific Islander","Unable to Determine","Unknown","White, Asian","White, Black/African American","White, Black/African American, American Indian/Alaskan Native","White, Black/African American, Asian","White, Black/African American, Native Hawaiian/Other Pacific Islander","White, Native Hawaiian/Other Pacific Islander") & hispanic_latino_ind!="YES" ~ 5,
+    TRUE ~ as.numeric(NA)),
+    race_csg_4 = factor(race_csg_4,
+         levels = c(1,2,3,4,5),
+         labels = c("Black", "Hispanic", "White","American Indian/Alaskan Native", "Other"))) %>%  ### use factor function to assign labels to values
+  mutate(gender_clean = case_when(
+    gender_txt=="Female" ~ 1,
+    gender_txt=="Male" ~ 2,
+    TRUE ~ as.numeric(NA)),
+    gender_clean = factor(gender_clean,
+         levels = c(1,2),
+         labels = c("Female", "Male"))) ### use factor function to assign labels to values
+
+### clean dates, create race/ethnicity var with both four and six values, and create sex flag for child_details_incidents file
+child_details_incidents_clean <- child_details_incidents %>% 
+  clean_names() %>% 
+  mutate(birth_dt = ymd(birth_dt),
+         incident_date = ymd(incident_date),
+         age_incident_date = time_length(difftime(incident_date, birth_dt), "years"),
+         race_csg_4 = case_when(
+    multi_race=="Black/African American" & hispanic_latino_ind!="YES" ~ 1,
+    hispanic_latino_ind=="YES" ~ 2,
+    multi_race=="White" & hispanic_latino_ind!="YES" ~ 3,
+    multi_race %in% c("American Indian/Alaskan Native","White, American Indian/Alaskan Native","American Indian/Alaskan Native, Native Hawaiian/Other Pacific Islander") ~ 4,
+    multi_race %in% c("Asian","Black/African American, American Indian/Alaskan Native","Black/African American, Asian","Black/African American, Native Hawaiian/Other Pacific Islander","Native Hawaiian/Other Pacific Islander","Unable to Determine","Unknown","White, Asian","White, Black/African American","White, Black/African American, American Indian/Alaskan Native","White, Black/African American, Asian","White, Black/African American, Native Hawaiian/Other Pacific Islander","White, Native Hawaiian/Other Pacific Islander") & hispanic_latino_ind!="YES" ~ 5,
+    TRUE ~ as.numeric(NA)),
+    race_csg_4 = factor(race_csg_4,
+         levels = c(1,2,3,4,5),
+         labels = c("Black", "Hispanic", "White","American Indian/Alaskan Native", "Other"))) %>%  ### use factor function to assign labels to values
+  mutate(gender_clean = case_when(
+    gender_txt=="Female" ~ 1,
+    gender_txt=="Male" ~ 2,
+    TRUE ~ as.numeric(NA)),
+    gender_clean = factor(gender_clean,
+         levels = c(1,2),
+         labels = c("Female", "Male"))) ### use factor function to assign labels to values
+```
+
+```{r include=FALSE}
+### apply additional business rules from josh and soleil:
+
+#1.
+#	Remove detention/jail from as well as the following in-home placements unique placement pool and placement episode: "Detention", "Jail", "Adoptive Home", "Parental Home", "Friend/Partner Home", "Licensed/Unlicensed Relative Home", "Unrelated Caregiver", "College Dormitory", "Boarding School, etc. (other)", "Terminated parental home", "Out of State Parental Home", "Out of State Licensed Relative", "Out of State Unlicensed Relative", "AWOL", "Escape", "Independent Living", "Rental Home/Apartment", "Pre-Adoptive Home", "NO MATCH FOUND"
+
+jj_assessments_placement_legal_status_clean %<>%
+  mutate(placement_does_not_count_overall = ifelse(living_arrangement %in% c("Detention", "Jail", "Adoptive Home", "Parental Home", "Friend/Partner Home", "Licensed/Unlicensed Relative Home", "Unrelated Caregiver", "College Dormitory", "Boarding School, etc. (other)", "Terminated parental home", "Out of State Parental Home", "Out of State Licensed Relative", "Out of State Unlicensed Relative", "AWOL", "Escape", "Independent Living", "Rental Home/Apartment", "Pre-Adoptive Home", "NO MATCH FOUND"),1,0),
+         placement_does_not_count_in_home_only = ifelse(living_arrangement %in% c("Adoptive Home", "Parental Home", "Friend/Partner Home", "Licensed/Unlicensed Relative Home", "Unrelated Caregiver", "College Dormitory", "Boarding School, etc. (other)", "Terminated parental home", "Out of State Parental Home", "Out of State Licensed Relative", "Out of State Unlicensed Relative", "Independent Living", "Rental Home/Apartment", "Pre-Adoptive Home", "NO MATCH FOUND"),1,0))
+
+
+# This leaves the following living arrangements as placements which can constitute a placement episode, count as unique individual placements, count towards placements per episode, and count towards length of stay: "Adult Foster Home", "Agency" (indicates "a youth is in an office overnight (at midnight)"), "Child Caring Institution", "Court Treatment Facility", "Emergency Residential Shelter", "Emergency Shelter Home", "EPIC Guardianship Home", "Hospital", "Mental Health Facility", "Juvenile Guardianship Home", "Licensed Unrelated Foster Home", "Out of State Child Caring Institution", "Out of State Foster Home", "Private Agency Foster Care", "Runaway Service Facility", "MDHHS Training School","Community Justice Center" (closed prior to study window)
+
+jj_assessments_placement_legal_status_clean %<>%
+  mutate(placement_does_count = ifelse(living_arrangement %in% c("Adult Foster Home", "Agency", "Child Caring Institution", "Court Treatment Facility", "Emergency Residential Shelter", "Emergency Shelter Home", "EPIC Guardianship Home", "Hospital", "Mental Health Facility", "Juvenile Guardianship Home", "Licensed Unrelated Foster Home", "Out of State Child Caring Institution", "Out of State Foster Home", "Private Agency Foster Care", "Runaway Service Facility", "MDHHS Training School","Community Justice Center"),1,0),
+         placement_does_count_plus_det_jail = ifelse(living_arrangement %in% c("Detention","Jail","Adult Foster Home", "Agency", "Child Caring Institution", "Court Treatment Facility", "Emergency Residential Shelter", "Emergency Shelter Home", "EPIC Guardianship Home", "Hospital", "Mental Health Facility", "Juvenile Guardianship Home", "Licensed Unrelated Foster Home", "Out of State Child Caring Institution", "Out of State Foster Home", "Private Agency Foster Care", "Runaway Service Facility", "MDHHS Training School","Community Justice Center"),1,0))
+
+#2. Separate out placement episodes that only include in-home supervision for secure/non-secure facility analysis 
+jj_assessments_placement_legal_status_clean %<>%
+  group_by(person_id,placement_episode_segment) %>% 
+  mutate(placement_episode_placement_does_count_total = sum(placement_does_count),
+         placement_episode_placement_does_count_with_det_jail_total = sum(placement_does_count_plus_det_jail),
+         placement_episode_placement_does_count_total_none = ifelse(placement_episode_placement_does_count_total==0,1,0),
+         placement_episode_placement_does_count_with_det_jail_total_none = ifelse(placement_episode_placement_does_count_with_det_jail_total==0,1,0),
+         placement_episode_filter_out = ifelse(placement_episode_placement_does_count_total_none==0,1,0)) %>% 
+  ungroup()
+
+### 642/9,765 observations (post dropping record with no legal status) have no out of home placement -- including either detention or jail
+
+### 2,249/9,765 observations (post dropping record with no legal status) have no out of home placement -- not counting either detention or jail
+
+# jj_assessments_placement_legal_status_clean_explore <- jj_assessments_placement_legal_status_clean %>%
+#   filter(placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020),
+#          placement_episode_placement_does_count_total_none==1)
+
+
+#3. Drop placement episodes with no legal status in legal_details table -- indicates that actual associated legal status not JJ or dual ward (records were pulled because a JJ case wasn't closed or because it is simply an A/N placement episode that occurred before a dual ward/JJ placement episode in our study window -- and also happens to be in our study window; i.e. a kid has an A/N placement episode from 2015-2016, in the study window, and then a dual ward placement episode from 2017-2018 -- we would have both episodes but only the legal status associated with the second episode b/c it is JJ-involved)
+
+# can still report on overall mdhhs placement history as the segment number (indicating the number of prior placement episodes was built using all unique placement episodes, regardless of legal status)
+
+# 5,130/14,895 unique placements episodes starting between 2015 and 2020 dropped -- WILL NEED TO CLEARLY ARTICULATE THE RATIONALE AND LIMITATIONS INTRODUCED BY THIS APPROACH (AND THEN CONFIRM EXPLANATION WITH MDHHS)
+
+# jj_assessments_placement_legal_status_study_window <- jj_assessments_placement_legal_status_clean %>%
+#   filter(placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020),
+#          !is.na(legal_status)==TRUE)
+
+
+jj_assessments_placement_legal_status_clean %<>%
+  filter(!is.na(legal_status)==TRUE)
+
+
+#4. Join disposition risk assessment data via dates -- within 60 days of placement...still need to think through how to present living arrangement by risk if we can use the data (i.e. highlight placement immediately following risk assessment? what if there are delays and youth's immediate placement following risk assessment is in-home but the risk assessment informs an eventual out-of-home placement? might be easier/cleaner to simply start with base of out-of-home placements and look at disposition risk assessments administered within the previous 60 days)
+
+jj_assessments_placement_legal_status_clean %<>% 
+  group_by(person_id,plcmnt_episode_id) %>% 
+  mutate(place_no_of_earliest_cci_mdhhs = ifelse(living_arrangement %in% c("Child Caring Institution","MDHHS Training School"),placement_episode_no,NA),
+         place_no_of_earliest_cci_mdhhs = min(place_no_of_earliest_cci_mdhhs[!is.na(place_no_of_earliest_cci_mdhhs)==TRUE])) %>%
+  ungroup() %>% 
+  mutate(across(where(is.numeric), ~na_if(., Inf)), 
+         across(where(is.numeric), ~na_if(., -Inf))) %>% 
+  mutate(disposition_risk_level_earliest_use = ifelse(is.na(disp_final_risk_level)==TRUE,disposition_risk_level_earliest,disp_final_risk_level),
+    disposition_risk_level_earliest_use = ifelse(place_no_of_earliest_disposition_assess>placement_episode_no,NA,disposition_risk_level_earliest_use),
+         disposition_risk_level_earliest_use = ifelse(is.na(disposition_risk_level_earliest_use)==TRUE,"Missing",disposition_risk_level_earliest_use))
+
+#5. legal status -- waiting on confirmation from mdhhs that legal status is initial legal status
+
+#6. incident data (filed, not substantiated data) only reliable starting in 2019/2020 -- waiting on tom and mike to confirm
+```
+
+```{r include=FALSE}
+### explore missingness of disposition risk assessment data by subsample (by legal status, living arrangement)
+jj_assessments_placement_legal_status_clean_risk_missing_explore <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020),
+         placement_episode_placement_does_count_total_none==0,
+         !is.na(legal_status)==TRUE) %>% 
+  mutate(disposition_risk_level_earliest_use = ifelse(is.na(disp_final_risk_level)==TRUE,disposition_risk_level_earliest,disp_final_risk_level),
+    disposition_risk_level_earliest_use = ifelse(place_no_of_earliest_disposition_assess>placement_episode_no,NA,disposition_risk_level_earliest_use),
+         disposition_risk_level_earliest_use = ifelse(is.na(disposition_risk_level_earliest_use)==TRUE,"Missing",disposition_risk_level_earliest_use))
+# 
+#          is.na(disposition_risk_level_earliest)==TRUE,
+#          living_arrangement%in%c("MDHHS Training School")) 
+
+# %>% 
+#   distinct(person_id,placement_episode_segment,.keep_all=TRUE) 
+  
+  
+table(jj_assessments_placement_legal_status_clean_risk_missing_explore$living_arrangement, jj_assessments_placement_legal_status_clean_risk_missing_explore$disposition_risk_level_earliest_use
+      , useNA = 'always')
+
+### spot check: 188718,342650,427655,653801,969790,1046244,1058126,1148376,1164926 == only residential and re-entry, no disposition; 195871 == much earlier risk assessment
+```
+
+```{r include=FALSE}
+### missing disposition risk assessment data examples for soleil
+child_details_missing_risk_assess_data <- child_details %>% 
+  filter(PERSON_ID %in% c(188718,342650,427655,653801,969790,1046244,1058126,1148376,1164926)) %>% 
+  select(PERSON_ID,BIRTH_DT)
+
+openxlsx::write.xlsx(child_details_missing_risk_assess_data,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Missingness to MDHHS\\child_details_missing_risk_assess_data_2_1_22.xlsx")
+```
+
+
+```{r include=FALSE}
+### write out two analytic files
+
+## jj_assessments_placement_legal_status_clean
+readr::write_delim(jj_assessments_placement_legal_status_clean,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_assessments_placement_legal_status_clean.txt", delim = "|")
+
+## child_details_incidents_clean
+readr::write_delim(child_details_incidents_clean,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\child_details_incidents_clean.txt", delim = "|")
+```
+
+
+## Placement Data Diagram
+
+<br>
+
+```{r echo=FALSE, fig.cap="Michigan Placement Data Files, Primary Keys, and Relationships", out.width = '100%'}
+knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Definitions\\michigan_placement_data_mapping.png")
+```
+
+<br><br>
+
+## Sample Descriptives
+
+- Unique Individuals per year
+- Legal status 
+
+<br>
+
+#### Sample N's : Unique Individuals by Year of Placement (unique by individual and year of placement)
+
+NOTE/QUESTION: Why do placement starts go back so far? Data entry errors or inclusion of referrals outside our requested time span? 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by year
+child_details_placements_offense_assess_individual_level_year <- child_details_placements_offense_assess_clean %>% 
+  distinct(person_id,placement_begin_date_year,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE) %>% 
+  group_by(placement_begin_date_year) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id)/14721*100, digits = 2)) %>% 
+  dplyr::rename(`Year of Placement` = placement_begin_date_year) %>% 
+  mutate(`Year of Placement` = as.character(`Year of Placement`))
+
+### all -- overall
+child_details_placements_offense_assess_clean_individual_level_total <- child_details_placements_offense_assess_clean %>% 
+  distinct(person_id,placement_begin_date_year,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Year of Placement` = "Overall") 
+
+### combine tables for kable
+child_details_placements_offense_assess_individual_level_year_table <- rbind(child_details_placements_offense_assess_individual_level_year,child_details_placements_offense_assess_clean_individual_level_total)
+
+### print table via kableextra
+kable(child_details_placements_offense_assess_individual_level_year_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(27, bold = TRUE)
+```
+
+<br><br>
+
+#### Legal Status: Dual, State, and County Wards in Data
+
+NOTE/QUESTION: Need to confirm two things about legal status; 1 -- that coding of dual ward, state ward, county ward is correct and buckets make sense (not sure if there's a way to distinguish county wards placed in state facilities versus county wards whose caseworkers simply entered their data into MiSACWIS, though?) and 2 -- the best way to link legal status to placement data with only person_id and dates? 
+
+No missing data -- each youth has at least one corresponding legal_status record. 
+
+For now, I've coded the following legal statuses as dual ward, based on Mike's feedback: 
+52 - MCI Ward/44 and Act 150/46 -- mdhhs (abuse/neglect whose rights have been terminated and delinquent public ward under act 150 w/ mdhhs)
+90 - Temp Court Ward 42 and Delinquent Court Ward 40 -- uncertain (a/n temp court and delinquent court ward; use other field for court, mdhhs, can change over time)
+91 -  Perm Court Ward 41 and Delinquent Court Ward 40 -- uncertain ()
+92 - Temp Court Ward 42 and Act 150/46 -- mdhhs
+93 - Perm Court Ward 41 and Act 150/46 -- mdhhs
+94 - MCI Ward/44 and Delinquent Court Ward/40 -- uncertain
+80 - In Home 42 and Delinquent Court Ward 40 -- uncertain
+82 - In Home 42 and Act 150/46 -- mdhhs
+
+And the following as state wards based on Soleil's feedback (according to Soleil, "Both the 40 and the 50 are MDHHS supervised youth, not county court supervised. The 50 is the legal status fort given when an intake is done in MiSACWIS until another status is added based on a court order or the youth may be a pre sentence investigation"):
+40 - Court Ward Delinquent -- mdhhs
+44 - State Ward ' MCI - Act 220/296
+46 - State Ward - Delinquent - Act 150 -- mdhhs
+50 - Non-Ward With a Delinquent Petition Filed -- either intake, juvenile competency, or pretrial investigations AND likely mdhhs supervised
+
+<br>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create three lists for dual, state, and county wards with the corresponding legal_status codes 
+dual_ward_status_list <- c("52 - MCI Ward/44 and Act 150/46","90 - Temp Court Ward 42 and Delinquent Court Ward 40","91 -  Perm Court Ward 41 and Delinquent Court Ward 40","92 - Temp Court Ward 42 and Act 150/46","93 - Perm Court Ward 41 and Act 150/46","94 - MCI Ward/44 and Delinquent Court Ward/40","80 - In Home 42 and Delinquent Court Ward 40","82 - In Home 42 and Act 150/46")
+
+state_ward_status_list <- c("40 - Court Ward Delinquent","46 - State Ward - Delinquent - Act 150","50 - Non-Ward With a Delinquent Petition Filed")
+
+county_ward_status_list <- c()
+
+### code legal_status into three groups: dual ward, state ward, and county ward
+legal_status %<>%
+  clean_names() %>% 
+  mutate(legal_status_unique_id = paste0(person_id,legal_status_begin,legal_status)) %>% 
+  mutate(legal_status_ward_flag = case_when(
+    legal_status %in% state_ward_status_list ~ 1,
+    legal_status %in% dual_ward_status_list ~ 2,
+    legal_status %in% county_ward_status_list ~ 3,
+    TRUE ~ as.numeric(NA)),
+    legal_status_ward_flag = factor(legal_status_ward_flag,
+         levels = c(1,2,3),
+         labels = c("State Ward","Dual Ward", "County Ward"))) ### use factor function to assign labels to values
+
+### all -- grouped by year
+legal_status_grouped <- legal_status %>% 
+  distinct(legal_status_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(legal_status)==TRUE) %>% 
+  group_by(legal_status_ward_flag) %>% 
+  summarise(`Unique Count (N)` = n_distinct(legal_status_unique_id),
+            `Percent of Total Legal Status File Sample (%)` = round(n_distinct(legal_status_unique_id)/14721*100, digits = 2)) %>% 
+  dplyr::rename(`Legal Status` = legal_status_ward_flag) 
+
+### all -- overall
+legal_status_overall <- legal_status %>% 
+  distinct(legal_status_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(legal_status)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(legal_status_unique_id),
+            `Percent of Total Legal Status File Sample (%)` = round(n_distinct(legal_status_unique_id)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Legal Status` = "Overall") 
+
+### combine tables for kable
+legal_status_table <- rbind(legal_status_grouped,legal_status_overall)
+
+### print table via kableextra
+kable(legal_status_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(3, bold = TRUE)
+```
+
+<br><br>
+
+## Demographic and Academic Data
+
+- Demographic and Academic Data: 
+- Race/Ethnicity
+- Gender
+- Age
+- Academic data 
+
+<br>
+
+#### Race/Ethnicity (unique by individual and year of placement)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by race
+child_details_placements_offense_assess_clean_invidual_level_race <- child_details_placements_offense_assess_clean %>% 
+  distinct(person_id,placement_begin_date_year,.keep_all = TRUE) %>% 
+  filter(!is.na(race_csg_4)==TRUE) %>% 
+  group_by(race_csg_4) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/15425*100, digits = 2)) %>% 
+  dplyr::rename(`Race/Ethnicity` = race_csg_4) 
+
+### all -- overall
+child_details_placements_offense_assess_clean_invidual_level_total <- child_details_placements_offense_assess_clean %>% 
+  distinct(person_id,placement_begin_date_year,.keep_all = TRUE) %>% 
+  filter(!is.na(race_csg_4)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Race/Ethnicity` = "Overall") 
+
+### combine tables for kable
+child_details_placements_offense_assess_clean_invidual_level_race_table <- rbind(child_details_placements_offense_assess_clean_invidual_level_race,child_details_placements_offense_assess_clean_invidual_level_total)
+
+### print table via kableextra
+kable(child_details_placements_offense_assess_clean_invidual_level_race_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(5, bold = TRUE)
+```
+
+<br><br>
+
+#### Gender (unique by individual and year of placement)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by race
+child_details_placements_offense_assess_clean_invidual_level_gender <- child_details_placements_offense_assess_clean %>% 
+  distinct(person_id,placement_begin_date_year,.keep_all = TRUE) %>% 
+  filter(!is.na(gender_clean)==TRUE) %>% 
+  group_by(gender_clean) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/15423*100, digits = 2)) %>% 
+  dplyr::rename(`Gender` = gender_clean) 
+
+### all -- overall
+child_details_placements_offense_assess_clean_invidual_level_gender_total <- child_details_placements_offense_assess_clean %>% 
+  distinct(person_id,placement_begin_date_year,.keep_all = TRUE) %>% 
+  filter(!is.na(gender_clean)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Gender` = "Overall") 
+
+### combine tables for kable
+child_details_placements_offense_assess_clean_invidual_level_gender_table <- rbind(child_details_placements_offense_assess_clean_invidual_level_gender,child_details_placements_offense_assess_clean_invidual_level_gender_total)
+
+### print table via kableextra
+kable(child_details_placements_offense_assess_clean_invidual_level_gender_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(3, bold = TRUE)
+```
+
+<br><br>
+
+#### Age at Beginning of Placement (unique by individual and year of placement)
+NOTE: Excluding all ages below 7 and above 19.5 as these seem most likely to be data entry errors (either with placement date or date of birth) -- does this make sense? Using this rule, we lose about 2,000 records (unique individuals by year)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create age bins
+child_details_placements_offense_assess_clean %<>%
+  mutate(age_placement_start = time_length(difftime(placement_begin_date, birth_dt), "years")) %>% 
+  group_by(person_id,placement_begin_date_year) %>% 
+  mutate(age_placement_start_min = min(age_placement_start)) %>% 
+  ungroup() %>% 
+  mutate(age_placement_start_min_bin = case_when(
+    age_placement_start_min>=7 & age_placement_start_min<10 ~ 1,
+    age_placement_start_min>=10 & age_placement_start_min<13 ~ 2,
+    age_placement_start_min>=13 & age_placement_start_min<16 ~ 3,
+    age_placement_start_min>=16 & age_placement_start_min<18 ~ 4,
+    age_placement_start_min>=18 & age_placement_start_min<=19.5 ~ 5, ### using 19.5 for now; i figure this indicates that the youth's offense was committed prior to 18th birthday but timing of detention was after 18th birthday? double check with emily
+    TRUE ~ as.numeric(NA)),
+    age_placement_start_min_bin = factor(age_placement_start_min_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 10", "10 to 13", "13 to 16","16 to 18","18+"))) ### use factor function to assign labels to values
+
+### create detention table by race/ethnicity -- removing 'unknown' for both tables
+placement_age_table <- child_details_placements_offense_assess_clean %>% 
+  filter(!is.na(age_placement_start_min_bin)==TRUE) %>%
+  dplyr::group_by(age_placement_start_min_bin) %>% 
+ summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+           `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/13695*100, digits = 2)) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Age` = age_placement_start_min_bin)
+
+### create overall detention table 
+placement_overall_age_table <- child_details_placements_offense_assess_clean %>% 
+  filter(!is.na(age_placement_start_min_bin)==TRUE) %>%
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Age` = "Overall")
+
+### merge race and overall tables via rbind
+placement_age_table_final <- rbind(placement_age_table,placement_overall_age_table)
+
+### print table via kableextra
+kable(placement_age_table_final, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE)
+```
+
+<br><br>
+
+#### Academic Data -- not comprehensive of all youth (only 2443 of 5695 youth have data in academic_evaluations data file -- 57%) and can only potentially link to placement data via dates (as we only have person_id otherwise)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### inner join academic_evaluations to child_details -- dropping records from child_details with no matching placement data
+child_details_academic <- inner_join(child_details, academic_evaluations, by = "PERSON_ID") %>% 
+  clean_names() %>% 
+  mutate(disability_504_flag = ifelse(!is.na(disability_504_begin_dt)==TRUE,1,0),
+         grade_lvl = ifelse(grade_lvl %in% c("GED","GED Complete","Post Secondary","Diploma Complete","12+"),13,grade_lvl)) %>% 
+  group_by(person_id) %>% 
+  mutate(disability_504_flag = ifelse(sum(disability_504_flag, na.rm = TRUE)>0,1,0),
+         academic_delay_poor_attendance_flag = ifelse(sum(academic_delay_poor_attendance, na.rm = TRUE)>0,1,0),
+         min_grade_lvl = min(as.numeric(grade_lvl)),
+         max_grade_lvl = max(as.numeric(grade_lvl)),
+         min_eval_date = min(ymd(evaluation_date)),
+         max_eval_date = max(ymd(evaluation_date))) %>% 
+  ungroup() %>% 
+  distinct(person_id, .keep_all = TRUE) %>% 
+  mutate(eval_time_span_first_last = time_length(difftime(max_eval_date, min_eval_date), "years"),
+         grade_lvl_difference = max_grade_lvl - min_grade_lvl,
+         grade_per_year = round(grade_lvl_difference/eval_time_span_first_last, digits = 1)) 
+
+### create detention table by grade level
+placement_acad_grade_level_table <- child_details_academic %>% 
+  filter(!is.na(min_grade_lvl)==TRUE) %>%
+  dplyr::group_by(min_grade_lvl) %>% 
+ summarise(`% Disability 504` = round(n_distinct(person_id[disability_504_flag==1])/n_distinct(person_id)*100, digits = 2),
+           `% Academic Delay due to Poor Attendance` = round(n_distinct(person_id[academic_delay_poor_attendance_flag==1])/n_distinct(person_id)*100, digits = 2),
+           `Grades Advanced per Year, Median ('1.0' is 1 grade advanced per year)` = median(grade_per_year, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Grade of First Evaluation` = min_grade_lvl)
+
+### create overall grade level table 
+placement_acad_overall_table <- child_details_academic %>% 
+  filter(!is.na(min_grade_lvl)==TRUE) %>%
+  summarise(`% Disability 504` = round(n_distinct(person_id[disability_504_flag==1])/n_distinct(person_id)*100, digits = 2),
+           `% Academic Delay due to Poor Attendance` = round(n_distinct(person_id[academic_delay_poor_attendance_flag==1])/n_distinct(person_id)*100, digits = 2),
+           `Grades Advanced per Year, Median ('1.0' is 1 grade advanced per year)` = median(grade_per_year,na.rm = TRUE)) %>% 
+  dplyr::mutate(`Grade of First Evaluation` = "Overall")
+
+### merge grade level and overall tables via rbind
+placement_acad_grade_level_table_final <- rbind(placement_acad_grade_level_table,placement_acad_overall_table)
+
+### print table via kableextra
+kable(placement_acad_grade_level_table_final, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(14, bold = TRUE)
+```
+
+<br><br>
+
+## Prior Offense history
+
+- Offense history -- looking for completeness of data and way to accurately link to placement data (maybe creating offense history flag?): need to follow up for clarification on statute severity lookup table using MCL code. Most concerning, though, is that only 3135 of 5,695 (45%) total unique youth have any offense data (unless we learn of specific scenarios that lead to missing offense data, we may need to exclude offense data entirely, unfortunately)
+
+- Criminal history/mental health flags -- completeness and source?
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### join case_plans_offense to child_details_placements_incidents_legal
+child_details_offense <- left_join(child_details, case_plans_offense, by = "PERSON_ID")
+```
+
+
+#### Offense History and Mental Health Flags -- data appears very incomplete/not usable unfortunately
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create detention table by race/ethnicity
+child_details_offense_flags_grouped <- child_details_placements_clean %>% 
+  distinct(person_id, .keep_all = TRUE) %>% 
+  filter(!is.na(race_csg_4)==TRUE) %>%
+  dplyr::group_by(race_csg_4) %>% 
+ summarise(`% Criminal History Flag` = round(n_distinct(person_id[criminal_hist_ind==1])/n_distinct(person_id)*100, digits = 2),
+           `% Violent Criminal History Flag` = round(n_distinct(person_id[violent_crime_cnvctn_ind==1])/n_distinct(person_id)*100, digits = 2),
+           `% Mental Health Flag` = round(n_distinct(person_id[mental_hlth_ind==1])/n_distinct(person_id)*100, digits = 2),) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Race/Ethnicity` = race_csg_4)
+
+### create overall offense flag table 
+child_details_offense_flags_overall <- child_details_placements_clean %>% 
+  distinct(person_id, .keep_all = TRUE) %>% 
+  filter(!is.na(race_csg_4)==TRUE) %>%
+  summarise(`% Criminal History Flag` = round(n_distinct(person_id[criminal_hist_ind==1])/n_distinct(person_id)*100, digits = 2),
+           `% Violent Criminal History Flag` = round(n_distinct(person_id[violent_crime_cnvctn_ind==1])/n_distinct(person_id)*100, digits = 2),
+           `% Mental Health Flag` = round(n_distinct(person_id[mental_hlth_ind==1])/n_distinct(person_id)*100, digits = 2),) %>% 
+  dplyr::mutate(`Race/Ethnicity` = "Overall")
+
+### merge grade level and overall tables via rbind
+child_details_offense_flags_table <- rbind(child_details_offense_flags_grouped,child_details_offense_flags_overall)
+
+### print table via kableextra
+kable(child_details_offense_flags_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(5, bold = TRUE)
+```
+
+
+<br><br>
+
+## Placement Descriptive Statistics
+
+NOTE: 704 youth in base file have no placement data (88% of youth in base file have placement data)
+
+- Placements counts over time
+- Mean # of placements per youth
+- Mean # of placements per referral?? (need to settle on case ID, if even possible)
+- Prior placement history (number and type of prior placements -- possible as we were given entire placement history of all youth with a jj placement in our requested time frame)
+- Secure/Non-secure
+- Living arrangement
+- Assessment data
+
+#### Placements Over Time
+
+NOTE/QUESTION: Defining unique placement -- one individual can have multiple cases which may include multiple placements. At what level should be group placements? For now, I'll group in two ways -- both overall placement counts AND individuals placed. 'place_no' in the placements file appears to number a youth's placement for the entirety of their involvement with DHHS (so for someone with three placements, each placement is labelled as either 1, 2, or 3). We could use this to group all placements by youth, if need be.
+
+Other outstanding questions: Treatment of multiple placements for one case/referral (leave as separate placements or group together)? Interpretation and coding of AWOL status? 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by year
+child_details_placement_level_year <- child_details_placements_clean %>% 
+  distinct(person_id,placement_begin_date_year,place_no,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE) %>% 
+  group_by(placement_begin_date_year) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year,place_no),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year,place_no)/31428*100, digits = 2)) %>% 
+  dplyr::rename(`Year of Placement` = placement_begin_date_year) %>% 
+  mutate(`Year of Placement` = as.character(`Year of Placement`))
+
+### all -- overall
+child_details_placement_level_total <- child_details_placements_clean %>% 
+  distinct(person_id,placement_begin_date_year,place_no,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(person_id,placement_begin_date_year,place_no),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id,placement_begin_date_year,place_no)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Year of Placement` = "Overall") 
+
+### combine tables for kable
+child_details_placement_level_year_table <- rbind(child_details_placement_level_year,child_details_placement_level_total)
+
+### print table via kableextra
+kable(child_details_placement_level_year_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(27, bold = TRUE)
+```
+
+<br><br>
+
+#### Mean Placements per Youth (inclusive of all placements in data file; not filtered on JJ placements specifically, yet)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+child_details_placements_clean %<>%
+  mutate(unique_placement_id = paste0(person_id,placement_begin_date_year,place_no)) ### create unique placement id to use with n_distinct below
+
+### create age bins
+child_details_placements_count_by_youth <- child_details_placements_clean %>%
+  group_by(person_id) %>% 
+  mutate(unique_placement_count = n_distinct(unique_placement_id)) %>% 
+  ungroup() %>% 
+  mutate(unique_placement_count_bin = case_when(
+    unique_placement_count==1 ~ 1,
+    unique_placement_count>1 & unique_placement_count<=3 ~ 2,
+    unique_placement_count>3 & unique_placement_count<7 ~ 3,
+    unique_placement_count>=6 & unique_placement_count<11 ~ 4,
+    unique_placement_count>=11 ~ 5, ### using 19.5 for now; i figure this indicates that the youth's offense was committed prior to 18th birthday but timing of detention was after 18th birthday? double check with emily
+    TRUE ~ as.numeric(NA)),
+    unique_placement_count_bin = factor(unique_placement_count_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("1", "2 or 3", "4 to 6","7 to 10","11+"))) %>% ### use factor function to assign labels to values
+  distinct(person_id,.keep_all = TRUE)
+
+### create detention table by race/ethnicity -- removing 'unknown' for both tables
+placement_count_table <- child_details_placements_count_by_youth %>% 
+  filter(!is.na(unique_placement_count_bin)==TRUE) %>%
+  dplyr::group_by(unique_placement_count_bin) %>% 
+ summarise(`Unique Count (N)` = n_distinct(person_id),
+           `Percent of Total Sample (%)` = round(n_distinct(person_id)/13695*100, digits = 2)) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Placement Count (N)` = unique_placement_count_bin)
+
+### create overall detention table 
+placement_count_table_overall <- child_details_placements_count_by_youth %>% 
+  filter(!is.na(unique_placement_count_bin)==TRUE) %>%
+  summarise(`Unique Count (N)` = n_distinct(person_id),
+            `Percent of Total Sample (%)` = round(n_distinct(person_id)/`Unique Count (N)`*100, digits = 2)) %>% 
+  dplyr::mutate(`Placement Count (N)` = "Overall")
+
+### merge race and overall tables via rbind
+placement_count_table_final <- rbind(placement_count_table,placement_count_table_overall)
+
+### print table via kableextra
+kable(placement_count_table_final, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE)
+```
+
+<br><br>
+
+#### Mean Placements per Youth per Placement Type (only 'living_arrangement' of Child Caring Institution, Detention, Parental Home, Licensed Unrelated Foster Home, Licensed/Unlicensed Relative Home, and AWOL included for now)
+NOTE: double check interpretation
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create age bins
+child_details_placements_count_by_youth_living_arrangement <- child_details_placements_clean %>%
+  filter(living_arrangement %in% c("Child Caring Institution", "Detention", "Parental Home", "Licensed Unrelated Foster Home", "Licensed/Unlicensed Relative Home", "AWOL")) %>% 
+  group_by(person_id,living_arrangement) %>% 
+  mutate(unique_placement_count = n_distinct(unique_placement_id)) %>% 
+  ungroup() %>% 
+  mutate(unique_placement_count_bin = case_when(
+    unique_placement_count==1 ~ 1,
+    unique_placement_count>1 & unique_placement_count<=3 ~ 2,
+    unique_placement_count>3 & unique_placement_count<7 ~ 3,
+    unique_placement_count>=6 & unique_placement_count<11 ~ 4,
+    unique_placement_count>=11 ~ 5, 
+    TRUE ~ as.numeric(NA)),
+    unique_placement_count_bin = factor(unique_placement_count_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("1", "2 or 3", "4 to 6","7 to 10","11+"))) %>% ### use factor function to assign labels to values
+  distinct(person_id,.keep_all = TRUE)
+
+### create detention table by race/ethnicity -- removing 'unknown' for both tables
+placement_count_table <- child_details_placements_count_by_youth_living_arrangement %>% 
+  filter(!is.na(living_arrangement)==TRUE) %>%
+  dplyr::group_by(living_arrangement) %>% 
+ summarise(`Overall (N)` = n_distinct(person_id),
+           `1 (N)` = n_distinct(person_id[unique_placement_count_bin=="1"]),
+           `1 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="1"])/2496*100, digits = 1),
+           `2 or 3 (N)` = n_distinct(person_id[unique_placement_count_bin=="2 or 3"]),
+           `2 or 3 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="2 or 3"])/1831*100, digits = 1),
+           `4 to 6 (N)` = n_distinct(person_id[unique_placement_count_bin=="4 to 6"]),
+           `4 to 6 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="4 to 6"])/482*100, digits = 1), 
+           `7 to 10 (N)` = n_distinct(person_id[unique_placement_count_bin=="7 to 10"]),
+           `7 to 10 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="7 to 10"])/91*100, digits = 1), 
+           `11+ (N)` = n_distinct(person_id[unique_placement_count_bin=="11+"]),
+           `11+ (%)` = round(n_distinct(person_id[unique_placement_count_bin=="11+"])/19*100, digits = 1)) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Placement Type` = living_arrangement)
+
+### create overall detention table 
+placement_count_table_overall <- child_details_placements_count_by_youth_living_arrangement %>%
+  filter(!is.na(living_arrangement)==TRUE) %>%
+ summarise(`Overall (N)` = n_distinct(person_id),
+           `1 (N)` = n_distinct(person_id[unique_placement_count_bin=="1"]),
+           `1 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="1"])/2496*100, digits = 1),
+           `2 or 3 (N)` = n_distinct(person_id[unique_placement_count_bin=="2 or 3"]),
+           `2 or 3 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="2 or 3"])/1831*100, digits = 1),
+           `4 to 6 (N)` = n_distinct(person_id[unique_placement_count_bin=="4 to 6"]),
+           `4 to 6 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="4 to 6"])/482*100, digits = 1), 
+           `7 to 10 (N)` = n_distinct(person_id[unique_placement_count_bin=="7 to 10"]),
+           `7 to 10 (%)` = round(n_distinct(person_id[unique_placement_count_bin=="7 to 10"])/91*100, digits = 1), 
+           `11+ (N)` = n_distinct(person_id[unique_placement_count_bin=="11+"]),
+           `11+ (%)` = round(n_distinct(person_id[unique_placement_count_bin=="11+"])/19*100, digits = 1)) %>% 
+  dplyr::mutate(`Placement Type` = "Overall")
+
+### merge race and overall tables via rbind
+placement_count_table_final <- rbind(placement_count_table,placement_count_table_overall)
+
+### print table via kableextra
+kable(placement_count_table_final, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(7, bold = TRUE)
+```
+
+<br><br>
+
+#### Secure/Non-Secure Placements Over Time (starting in 2015)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by year
+child_details_placement_secure_year <- child_details_placements_clean %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE,
+         placement_begin_date_year>=2015) %>% 
+  group_by(placement_begin_date_year) %>% 
+  summarise(`Total (N)` = n_distinct(unique_placement_id),
+            `Secure (N)` = n_distinct(unique_placement_id[secure_facility==1]),
+            `Secure (%)` = round(`Secure (N)`/`Total (N)`*100, digits = 2),
+            `Non-Secure (N)` = n_distinct(unique_placement_id[secure_facility==0]),
+            `Non-Secure (%)` = round(`Non-Secure (N)`/`Total (N)`*100, digits = 2)) %>% 
+  dplyr::rename(`Year of Placement` = placement_begin_date_year) %>% 
+  mutate(`Year of Placement` = as.character(`Year of Placement`))
+
+### print table via kableextra
+kable(child_details_placement_secure_year, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") 
+```
+
+<br><br>
+
+#### Placement Type Over Time (2015 to 2020)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create 2015 sample count for denominators within group_by statement
+mi_placement_unique_2015 <- n_distinct(child_details_placements_clean$unique_placement_id[child_details_placements_clean$placement_begin_date_year==2015 & !is.na(child_details_placements_clean$placement_begin_date_year)==TRUE])
+
+### create 2016 sample count for denominators within group_by statement
+mi_placement_unique_2016 <- n_distinct(child_details_placements_clean$unique_placement_id[child_details_placements_clean$placement_begin_date_year==2016 & !is.na(child_details_placements_clean$placement_begin_date_year)==TRUE])
+
+### create 2017 sample count for denominators within group_by statement
+mi_placement_unique_2017 <- n_distinct(child_details_placements_clean$unique_placement_id[child_details_placements_clean$placement_begin_date_year==2017 & !is.na(child_details_placements_clean$placement_begin_date_year)==TRUE])
+
+### create 2018 sample count for denominators within group_by statement
+mi_placement_unique_2018 <- n_distinct(child_details_placements_clean$unique_placement_id[child_details_placements_clean$placement_begin_date_year==2018 & !is.na(child_details_placements_clean$placement_begin_date_year)==TRUE])
+
+### create 2019 sample count for denominators within group_by statement
+mi_placement_unique_2019 <- n_distinct(child_details_placements_clean$unique_placement_id[child_details_placements_clean$placement_begin_date_year==2019 & !is.na(child_details_placements_clean$placement_begin_date_year)==TRUE])
+
+### create 2020 sample count for denominators within group_by statement
+mi_placement_unique_2020 <- n_distinct(child_details_placements_clean$unique_placement_id[child_details_placements_clean$placement_begin_date_year==2020 & !is.na(child_details_placements_clean$placement_begin_date_year)==TRUE])
+
+### all -- grouped by year
+child_details_placement_type_year <- child_details_placements_clean %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE,
+         placement_begin_date_year>=2015,
+         placement_begin_date_year<=2019) %>% 
+  group_by(living_arrangement) %>% 
+  summarise(`2015 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2015]),
+            `2015 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2015])/mi_placement_unique_2015*100, digits = 2),
+            `2016 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2016]),
+            `2016 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2016])/mi_placement_unique_2016*100, digits = 2),
+            `2017 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2017]),
+            `2017 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2017])/mi_placement_unique_2017*100, digits = 2),
+            `2018 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2018]),
+            `2018 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2018])/mi_placement_unique_2018*100, digits = 2),
+            `2019 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2019]),
+            `2019 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2019])/mi_placement_unique_2019*100, digits = 2)) %>%
+  dplyr::rename(`Placement Type` = living_arrangement)
+
+### all -- total
+child_details_placement_type_total <- child_details_placements_clean %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(placement_begin_date_year)==TRUE,
+         placement_begin_date_year>=2015,
+         placement_begin_date_year<=2019) %>% 
+  summarise(`2015 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2015]),
+            `2015 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2015])/mi_placement_unique_2015*100, digits = 2),
+            `2016 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2016]),
+            `2016 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2016])/mi_placement_unique_2016*100, digits = 2),
+            `2017 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2017]),
+            `2017 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2017])/mi_placement_unique_2017*100, digits = 2),
+            `2018 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2018]),
+            `2018 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2018])/mi_placement_unique_2018*100, digits = 2),
+            `2019 (N)` = n_distinct(unique_placement_id[placement_begin_date_year==2019]),
+            `2019 (%)` = round(n_distinct(unique_placement_id[placement_begin_date_year==2019])/mi_placement_unique_2019*100, digits = 2)) %>%
+  dplyr::mutate(`Placement Type` = "Overall")
+
+
+### combine tables for kable
+child_details_placement_type_year_table <- rbind(child_details_placement_type_year,child_details_placement_type_total)
+
+### print table via kableextra
+kable(child_details_placement_type_year_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(32, bold = TRUE)
+
+```
+
+<br><br>
+
+#### Risk Assessment Score by Risk Assessment Tool/Timing 
+NOTE: Most youth do not seem to have any risk score (only 1,369 of 4,695 youth have any assessment data -- 24%); the percentage is obviously much lower for placements with risk assessment data linked -- though this will be more complicated to tease out as it appears that jj_assessments data can only be linked to placements data via person_id and aligning date of assessment with date of placement (haven't yet fully vetted, though)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+case_plans_jj %<>%
+  clean_names() %>% 
+  mutate(unique_assessment_id = paste0(person_id,mi_sacwis_case_id,case_plan_id,eff_begin_date)) ### create unique placement id to use with n_distinct below
+
+### all -- grouped by timing of assessment
+case_plans_jj_assessment_grouped <- case_plans_jj %>% 
+  distinct(unique_assessment_id,.keep_all = TRUE) %>% 
+  filter(!is.na(assessment_type)==TRUE,
+         !is.na(risk_level)==TRUE) %>% 
+  group_by(assessment_type) %>% 
+  summarise(`Total (N)` = n_distinct(unique_assessment_id),
+            `Low (N)` = n_distinct(unique_assessment_id[risk_level=="Low"]),
+            `Low (%)` = round(n_distinct(unique_assessment_id[risk_level=="Low"])/`Total (N)`*100, digits = 2),
+            `Moderate (N)` = n_distinct(unique_assessment_id[risk_level=="Moderate"]),
+            `Moderate (%)` = round(n_distinct(unique_assessment_id[risk_level=="Moderate"])/`Total (N)`*100, digits = 2),
+            `High (N)` = n_distinct(unique_assessment_id[risk_level=="High"]),
+            `High (%)` = round(n_distinct(unique_assessment_id[risk_level=="High"])/`Total (N)`*100, digits = 2)) %>%
+  dplyr::rename(`Assessment Type` = assessment_type)
+
+### print table via kableextra
+kable(case_plans_jj_assessment_grouped, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") 
+```
+
+<br><br>
+
+## Incidents
+
+- Incidents over time (not standardized with placements, yet, however)
+- Incident type (may need some clarification of meaning of certain incident groupings -- like seclusion)
+- Incident count by placement/provider type 
+- Youth restraint flag by placement/provider type
+
+<br>
+
+#### Incidents over time (not standardized with placements, yet, however)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+incidents %<>%
+  clean_names() %>% 
+  distinct(person_id,incident_id,incident_type, .keep_all = TRUE) %>% ### de-dup by incident (only three duplicates)
+  mutate(incident_date = ymd(incident_date),
+         incident_year = year(incident_date),
+         incident_unique_id = paste0(person_id,incident_id,incident_type))
+
+### all -- grouped by year
+incidents_overall_count_year <- incidents %>% 
+  distinct(incident_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(incident_year)==TRUE) %>% 
+  group_by(incident_year) %>% 
+  summarise(`Unique Count (N)` = n_distinct(incident_unique_id),
+            `Percent of Total Sample (%)` = round(n_distinct(incident_unique_id)/53384*100, digits = 2)) %>% 
+  dplyr::rename(`Year of Incident` = incident_year) %>% 
+  mutate(`Year of Incident` = as.character(`Year of Incident`))
+
+### all -- overall
+incidents_overall_count_total <- incidents %>% 
+  distinct(incident_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(incident_year)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(incident_unique_id),
+            `Percent of Total Sample (%)` = round(n_distinct(incident_unique_id)/53384*100, digits = 2)) %>% 
+  dplyr::mutate(`Year of Incident` = "Overall") 
+
+### combine tables for kable
+incidents_overall_count_year_table <- rbind(incidents_overall_count_year,incidents_overall_count_total)
+
+### print table via kableextra
+kable(incidents_overall_count_year_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(9, bold = TRUE)
+```
+
+<br><br>
+
+####  Incident Type (may need some clarification of meaning of certain incident groupings -- like seclusion)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by year
+incidents_type_grouped <- incidents %>% 
+  distinct(incident_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(incident_type)==TRUE) %>% 
+  group_by(incident_type) %>% 
+  summarise(`Unique Count (N)` = n_distinct(incident_unique_id),
+            `Percent of Total Sample (%)` = round(n_distinct(incident_unique_id)/53384*100, digits = 2)) %>% 
+  dplyr::rename(`Incident Type` = incident_type) %>% 
+  mutate(`Incident Type` = as.character(`Incident Type`))
+
+### all -- overall
+incidents_type_grouped_total <- incidents %>% 
+  distinct(incident_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(incident_year)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(incident_unique_id),
+            `Percent of Total Sample (%)` = round(n_distinct(incident_unique_id)/53384*100, digits = 2)) %>% 
+  dplyr::mutate(`Incident Type` = "Overall") 
+
+### combine tables for kable
+incidents_type_grouped_total_table <- rbind(incidents_type_grouped,incidents_type_grouped_total)
+
+### print table via kableextra
+kable(incidents_type_grouped_total_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(34, bold = TRUE)
+```
+
+<br><br>
+
+#### Incident and Restraint Count by Placement/Provider Type (likely need more specific definition for 'child_youth_restraint_ind' flag)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### all -- grouped by year
+incidents_provider_type_grouped <- incidents %>% 
+  distinct(incident_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(provider_type)==TRUE) %>% 
+  group_by(provider_type) %>% 
+  summarise(`Unique Incident Count (N)` = n_distinct(incident_unique_id),
+            `Percent of Total Sample (%)` = round(n_distinct(incident_unique_id)/53384*100, digits = 2),
+            `Incidents Involving Youth Restraint (N)` = n_distinct(incident_unique_id[child_youth_restraint_ind==1]),
+            `Incidents Involving Youth Restraint (%)` = round(n_distinct(incident_unique_id[child_youth_restraint_ind==1])/n_distinct(incident_unique_id)*100, digits = 2)) %>% 
+  dplyr::rename(`Provider Type` = provider_type) %>% 
+  mutate(`Provider Type` = as.character(`Provider Type`))
+
+### all -- overall
+incidents_provider_type_grouped_total <- incidents %>% 
+  distinct(incident_unique_id,.keep_all = TRUE) %>% 
+  filter(!is.na(provider_type)==TRUE) %>% 
+  summarise(`Unique Incident Count (N)` = n_distinct(incident_unique_id),
+            `Percent of Total Sample (%)` = round(n_distinct(incident_unique_id)/53384*100, digits = 2),
+            `Incidents Involving Youth Restraint (N)` = n_distinct(incident_unique_id[child_youth_restraint_ind==1]),
+            `Incidents Involving Youth Restraint (%)` = round(n_distinct(incident_unique_id[child_youth_restraint_ind==1])/n_distinct(incident_unique_id)*100, digits = 2)) %>% 
+  dplyr::mutate(`Provider Type` = "Overall") 
+
+### combine tables for kable
+incidents_provider_type_grouped_total_table <- rbind(incidents_provider_type_grouped,incidents_provider_type_grouped_total)
+
+### print table via kableextra
+kable(incidents_provider_type_grouped_total_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(19, bold = TRUE)
+```
+
+<br><br>
+
+## Questions/Requests
+
+<br>
+
+* Mike mentioned he could send us more information around legal status code descriptions (to separately flag state jj wards, dual wards, county wards contracted to state facilities, and county wards not in state facilities (but whose caseworker entered data in misacwis?)) Follow-up regarding conflicting information from Melinda and Soleil
+
+** Following up with Soleil on 11/19 to double check coding of state vs county ward -- according to Soleil's email, no county wards are included in data file
+
+* Reasons for data missingness in academic_evaluations, placements, and offenses
+
+** From Mike: "The offense and academic evaluations are what we have seen before.  We can look into the placement records.  The program office may be able to provide insight into the service plans and JJ evaluations since some of these may have hard copies uploaded to the system or just had paper copies completed before a certain date. I have copied Tom and Melinda on the email."
+
+* Instances where one offense/one placement seems linked to two different MiSACWIS_CASE_IDs and CASE_PLAN_IDs?
+
+** From Mike: "It is possible that a child’s case ID may change during their time in care.  When we switched to the MiSACWIS system the case ID was based on what is referred to as the family case, ongoing case, or umbrella case.  If I child becomes a permanent ward of the state they would receive a new case ID."
+<br>

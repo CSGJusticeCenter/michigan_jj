@@ -1,0 +1,74 @@
+---
+title: "michigan_jj_placement_data_mapping"
+author: Andrew Byrum
+date: '9/17/2021'
+output: html_document
+---
+
+### This syntax pulls in all Michigan JJ placement data -- stored as an Excel Worksheet -- and preliminarily maps their relationships with the datamodelr package (https://github.com/bergant/datamodelr)
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8")
+```
+
+```{r include=FALSE}
+### pull in iowa data from raw excel files; each tab in each excel file will be a separate dataframe
+read_excel_allsheets <- function(filename) { 
+  sheets <- readxl::excel_sheets(filename) 
+  x <- lapply(sheets, function(X) readxl::read_excel(filename, sheet = X)) 
+  names(x) <- sheets 
+  x 
+} 
+
+### create list of all files we want -- all .xlsx files in project data folder
+mi_placement_data <- list.files(path = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\", 
+                     pattern = "*.xlsx",
+                     full.names = TRUE)
+
+### lapply function over list of files we want to import
+list_of_mi_placement_tabs <- lapply(mi_placement_data, read_excel_allsheets)
+
+### assign names from iowa_files to list_of_ticket_dataframes
+names(list_of_mi_placement_tabs) <- janitor::make_clean_names(basename(mi_placement_data))
+
+### convert lists to tibbles -- we still have lists of lists, though
+list2env(list_of_mi_placement_tabs, envir=.GlobalEnv) 
+
+### convert list to separate dataframes with clean names
+names(placements_xlsx) <- janitor::make_clean_names(names(placements_xlsx))
+
+list2env(placements_xlsx,envir=.GlobalEnv) 
+
+### remove original list of dataframes from environment
+rm(list=ls(pattern="placements_xlsx"))
+```
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+### create data map using datamodelr package; first, we have to name each table in the list we're creating, second we establish which columns are primary keys for each table via dm_set_key, and lastly we indicate how tables should be joined together -- which produces arrows between two tables via dm_add_references (this data map will need to be confirmed with our Michigan data contacts)
+michigan_placements_data_map <- list(child_details = child_details, legal_status = legal_status, academic_evaluations = academic_evaluations, placements = placements, jj_assessments = jj_assessments, case_plans = case_plans, incidents = incidents, offenses = offenses) %>% ### list dataframes to map
+    dm_from_data_frames() %>%
+    dm_set_key("child_details", "PERSON_ID") %>% ### set primary keys in each dataframe 
+    dm_set_key("legal_status", "PERSON_ID") %>% 
+    dm_set_key("academic_evaluations", "PERSON_ID") %>%
+    dm_set_key("placements", c("PERSON_ID","PROVIDER_ID")) %>%
+    dm_set_key("jj_assessments", c("PERSON_ID","CASE_PLAN_ID")) %>% 
+    dm_set_key("case_plans", c("PERSON_ID","MiSACWIS_CASE_ID","CASE_PLAN_ID")) %>% 
+    dm_set_key("incidents", c("PERSON_ID", "INCIDENT_ID", "PROVIDER_ID")) %>%
+    dm_set_key("offenses", c("PERSON_ID","MiSACWIS_CASE_ID")) %>% 
+    dm_add_references(legal_status$PERSON_ID == child_details$PERSON_ID, 
+        academic_evaluations$PERSON_ID == child_details$PERSON_ID,
+        placements$PERSON_ID == child_details$PERSON_ID,
+        case_plans$PERSON_ID == child_details$PERSON_ID,
+        jj_assessments$PERSON_ID == case_plans$PERSON_ID,
+        jj_assessments$CASE_PLAN_ID == case_plans$CASE_PLAN_ID,
+        incidents$PERSON_ID == placements$PERSON_ID,
+        incidents$PROVIDER_ID == placements$PROVIDER_ID,
+        offenses$PERSON_ID == case_plans$PERSON_ID,
+        offenses$MiSACWIS_CASE_ID == case_plans$MiSACWIS_CASE_ID) %>% 
+    dm_create_graph(rankdir = "BT", columnArrows = FALSE, col_attr = c("column", "type")) ### draw arrow to establish linkage relationship
+
+### export data map as png file -- had to play around with height and width to render an image that kept legibility as user zooms in (since there are 40+ tables here)
+dm_export_graph(michigan_placements_data_map, file_name = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Definitions\\michigan_placement_data_mapping.png", width = 5000, height = 3500)
+```

@@ -1,0 +1,280 @@
+---
+title: "MDHHS Placement Data Missingness Exploration (updated 1/3)"
+author: "Andrew Byrum"
+output: 
+    html_document:
+        df_print: paged
+        toc: true
+        toc_float: true
+---
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","tidylog","distill","tidylog")
+```
+
+```{r include=FALSE}
+### pull in iowa data from raw excel files; each tab in each excel file will be a separate dataframe
+read_excel_allsheets <- function(filename) { 
+  sheets <- readxl::excel_sheets(filename) 
+  x <- lapply(sheets, function(X) readxl::read_excel(filename, sheet = X)) 
+  names(x) <- sheets 
+  x 
+} 
+
+### create list of all files we want -- all .xlsx files in project data folder
+mi_placement_data <- list.files(path = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\", 
+                     pattern = "*CSG_JJ_01-01-2015 through 12-31-2020_121321.xlsx",
+                     full.names = TRUE)
+
+### lapply function over list of files we want to import
+list_of_mi_placement_tabs <- lapply(mi_placement_data, read_excel_allsheets)
+
+### assign names from iowa_files to list_of_ticket_dataframes
+names(list_of_mi_placement_tabs) <- janitor::make_clean_names(basename(mi_placement_data))
+
+### convert lists to tibbles -- we still have lists of lists, though
+list2env(list_of_mi_placement_tabs, envir=.GlobalEnv) 
+
+### convert list to separate dataframes with clean names
+names(csg_jj_01_01_2015_through_12_31_2020_121321_xlsx) <- janitor::make_clean_names(names(csg_jj_01_01_2015_through_12_31_2020_121321_xlsx))
+
+list2env(csg_jj_01_01_2015_through_12_31_2020_121321_xlsx,envir=.GlobalEnv) 
+
+### remove original list of dataframes from environment
+rm(list=ls(pattern="csg_jj_01_01_2015_through_12_31_2020_121321_xlsx"))
+```
+
+```{r eval=FALSE,include=FALSE}
+### join all files together using data table diagram as visual guide using left join, starting with child_details -- our base demo file
+
+###### de-dup child_details using PERSON_ID
+child_details %<>%
+  distinct(PERSON_ID,.keep_all = TRUE) ### file already unique by PERSON_ID; no records dropped 
+
+###### de-dup placements using all columns
+placements %<>%
+  distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+
+### inner join placements to child_details -- dropping records from child_details with no matching placement data
+child_details_placements <- inner_join(child_details, placements, by = "PERSON_ID")
+
+### IGNORE incidents FOR NOW -- NEED TO CLEAN + PIVOT WIDE BEFORE MERGING; MAY NEED TO ANALYZE SEPARATELY -- NOT JOINED TO MAIN ANALYTIC FILE AS I NEED TO EXPLORE HOW AND IF WE CAN JOIN INCIDENTS TO SPECIFIC PLACEMENTS + CASES
+
+# ###### de-dup incidents using all columns
+# incidents %<>%
+#   distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+# 
+# ### join incidents to child_details_placements
+# child_details_placements_incidents <- left_join(child_details_placements, incidents, by = c("PERSON_ID","PROVIDER_ID"))
+
+### IGNORE legal_status FOR NOW -- NEED TO CLEAN + PIVOT WIDE BEFORE MERGING; MAY NEED TO ANALYZE SEPARATELY -- NOT JOINED TO MAIN ANALYTIC FILE AS I NEED TO EXPLORE HOW AND IF WE CAN JOIN legal_status TO SPECIFIC PLACEMENTS + CASES
+
+# ###### de-dup legal_status using all columns
+# legal_status %<>%
+#   distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+# 
+# ### join legal_status to child_details_placements_incidents
+# child_details_placements_incidents_legal <- left_join(child_details_placements_incidents, legal_status, by = "PERSON_ID")
+
+###### de-dup case_plans using all columns
+case_plans %<>%
+  distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+
+###### de-dup offenses using all columns
+offenses %<>%
+  distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+
+### join offense to case_plans to attach MiSACWIS CASE ID to each offense; joining separately from jj_assessments as we have to de-dup differently in each scenario; right join to keep all offenses records and only records from case_plans which match -- but prefer to have case_plans records as first columns (so right join)
+case_plans_offense <- right_join(case_plans,offenses,by = c("PERSON_ID","MiSACWIS_CASE_ID")) %>% 
+  distinct(PERSON_ID,MiSACWIS_CASE_ID,CHARGED_OFFENSE_DATE,CHARGED_OFFENSE,FINAL_OFFENSE_MCL_CODE,.keep_all = TRUE) %>% ### offenses are duplicated over CASE_PLAN_ID since we're joining on c("PERSON_ID","MiSACWIS_CASE_ID"); de-dup to keep one unique charge per PERSON_ID/MiSACWIS_CASE_ID
+  dplyr::select(-c(CASE_PLAN_ID,PLAN_DATE,PLAN_TYPE)) %>% ### only merging with case_plans to join offense data to misacwis id
+  group_by(PERSON_ID,MiSACWIS_CASE_ID) %>% ### pivot wide by PERSON_ID,MiSACWIS_CASE_ID (spreading charge data wide)
+  mutate(col_name=paste0("charge_num",'_',row_number())) %>%
+  ungroup() %>% 
+  pivot_wider(id_cols = c(PERSON_ID,MiSACWIS_CASE_ID), names_from = col_name, values_from = CHARGED_OFFENSE_DATE:REFERRING_OFFENSE_IND, values_fill = NA) %>% 
+  dplyr::select(where(~!all(is.na(.x))))
+
+### join case_plans_offense to child_details_placements_incidents_legal
+child_details_placements_offense <- left_join(child_details_placements, case_plans_offense, by = "PERSON_ID")
+
+###### de-dup jj_assessments using all columns
+jj_assessments <- assessments %>%
+  distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+
+### join jj_assessments and case_plans first to remove unnecessary records (most of the case plan records -- which just state multiple different case plan for each case, but no further detail); right join to keep all jj_assessments records and only records from case_plans which match -- but prefer to have case_plans records as first columns (so right join)
+case_plans_jj <- right_join(case_plans,jj_assessments, by = c("PERSON_ID","CASE_PLAN_ID","PLAN_TYPE","PLAN_DATE")) %>% 
+  filter(!is.na(RISK_LEVEL)==TRUE) ### drop all records with missing risk level data; these are records that had a case plan entry but no jj_assessment or offense data attached to that case plan record (for our purposes, these case plan records are not necessary)
+
+### join jj_assessments to child_details_placements_incidents_legal_case; using full join as not all columns from case_plan will match, but we don't want duplicate column names
+child_details_placements_offense_assess <- full_join(child_details_placements_offense, case_plans_jj, by = c("PERSON_ID","MiSACWIS_CASE_ID"))
+
+### IGNORE ACADEMIC EVALUATIONS FOR NOW -- NEED TO CLEAN + PIVOT WIDE BEFORE MERGING
+
+###### de-dup academic_evaluations using all columns
+# academic_evaluations %<>%
+#   distinct(.,.keep_all = TRUE) ### file already unique; no pure duplicates and no records dropped 
+# 
+# ### join academic_evaluations to child_details_placements_incidents_legal_offense_assess
+# child_details_placements_offense_assess_acad <- left_join(child_details_placements_offense_assess, academic_evaluations, by = c("PERSON_ID"))
+```
+
+```{r eval=FALSE,include=FALSE}
+### clean dates, create race/ethnicity var with both four and six values, and create sex flag
+child_details_placements_offense_assess_clean <- child_details_placements_offense_assess %>% 
+  clean_names() %>% 
+  mutate(birth_dt = ymd(birth_dt),
+         plan_date = ymd(plan_date),
+         eff_begin_date = ymd(eff_begin_date),
+         eff_end_date = ymd(eff_end_date),
+         placement_begin_date = ymd(placement_begin_date),
+         placement_end_date = ymd(placement_end_date),
+         placement_begin_date_year = year(placement_begin_date),
+         placement_end_date_year = year(placement_end_date),
+         age_placement_start = time_length(difftime(placement_begin_date, birth_dt), "years"),
+         race_csg_4 = case_when(
+    multi_race=="Black/African American" & hispanic_latino_ind!="YES" ~ 1,
+    hispanic_latino_ind=="YES" ~ 2,
+    multi_race=="White" & hispanic_latino_ind!="YES" ~ 3,
+    multi_race %in% c("American Indian/Alaskan Native","American Indian/Alaskan Native, Native Hawaiian/Other Pacific Islander","Asian","Black/African American, American Indian/Alaskan Native","Black/African American, Asian","Black/African American, Native Hawaiian/Other Pacific Islander","Native Hawaiian/Other Pacific Islander","Unable to Determine","Unknown","White, American Indian/Alaskan Native","White, Asian","White, Black/African American","White, Black/African American, American Indian/Alaskan Native","White, Black/African American, Asian","White, Black/African American, Native Hawaiian/Other Pacific Islander","White, Native Hawaiian/Other Pacific Islander") & hispanic_latino_ind!="YES" ~ 4,
+    TRUE ~ as.numeric(NA)),
+    race_csg_4 = factor(race_csg_4,
+         levels = c(1,2,3,4),
+         labels = c("Black", "Hispanic", "White", "Other"))) %>%  ### use factor function to assign labels to values
+  mutate(gender_clean = case_when(
+    gender_txt=="Female" ~ 1,
+    gender_txt=="Male" ~ 2,
+    TRUE ~ as.numeric(NA)),
+    gender_clean = factor(gender_clean,
+         levels = c(1,2),
+         labels = c("Female", "Male"))) ### use factor function to assign labels to values
+
+### clean dates, create race/ethnicity var with both four and six values, and create sex flag for demo/placement file only
+child_details_placements_clean <- child_details_placements %>% 
+  clean_names() %>% 
+  mutate(birth_dt = ymd(birth_dt),
+         placement_begin_date = ymd(placement_begin_date),
+         placement_end_date = ymd(placement_end_date),
+         placement_begin_date_year = year(placement_begin_date),
+         placement_end_date_year = year(placement_end_date),
+         age_placement_start = time_length(difftime(placement_begin_date, birth_dt), "years"),
+         race_csg_4 = case_when(
+    multi_race=="Black/African American" & hispanic_latino_ind!="YES" ~ 1,
+    hispanic_latino_ind=="YES" ~ 2,
+    multi_race=="White" & hispanic_latino_ind!="YES" ~ 3,
+    multi_race %in% c("American Indian/Alaskan Native","American Indian/Alaskan Native, Native Hawaiian/Other Pacific Islander","Asian","Black/African American, American Indian/Alaskan Native","Black/African American, Asian","Black/African American, Native Hawaiian/Other Pacific Islander","Native Hawaiian/Other Pacific Islander","Unable to Determine","Unknown","White, American Indian/Alaskan Native","White, Asian","White, Black/African American","White, Black/African American, American Indian/Alaskan Native","White, Black/African American, Asian","White, Black/African American, Native Hawaiian/Other Pacific Islander","White, Native Hawaiian/Other Pacific Islander") & hispanic_latino_ind!="YES" ~ 4,
+    TRUE ~ as.numeric(NA)),
+    race_csg_4 = factor(race_csg_4,
+         levels = c(1,2,3,4),
+         labels = c("Black", "Hispanic", "White", "Other"))) %>%  ### use factor function to assign labels to values
+  mutate(gender_clean = case_when(
+    gender_txt=="Female" ~ 1,
+    gender_txt=="Male" ~ 2,
+    TRUE ~ as.numeric(NA)),
+    gender_clean = factor(gender_clean,
+         levels = c(1,2),
+         labels = c("Female", "Male"))) ### use factor function to assign labels to values
+```
+
+<br>
+
+## Changes from originally-provided MDHHS placement data to 12/15-provided MDHHS placement data
+
+* 5,695 unique youth in initial data; only 3,024 in updated data
+* It appears that we're now missing 'MiSACWIS_CASE_ID' in the 'offenses' tab/data file
+
+<br>
+
+## Missing Data in 'assessments' File/Excel Tab
+
+* 1,306/3,024 youth in 'child_details' file/Excel tab have no record in 'jj_assessments' data (43% of youth in child_details have no jj_assessments data -- down from 76% in initial data transfer) 
+* There are only 1,718 unique youth in 'assessments' data, up from 1,369 unique youth in prior data (this represents about 57% of all unique youth in the 'child_details' tab, up from only 24% in prior data file)
+* Output below illustrates match rate between 'child_details' and 'jj_assessments' where 'x' represents 'child_details' table. Rows only in 'x' are records in 'child_details' with no corresponding records in 'jj_assessments' table -- by joining on "PERSON_ID"
+
+### Joining 'jj_assessments' to 'child_details'
+```{r warning=FALSE}
+### inner join placements to child_details
+child_details_assessments <- left_join(child_details, assessments, by = "PERSON_ID") %>% 
+  filter(is.na(ASSESSMENT_TYPE)==TRUE) %>% 
+  select(PERSON_ID) 
+
+child_details_no_assessment <- inner_join(child_details,child_details_assessments, by = "PERSON_ID")
+
+openxlsx::write.xlsx(child_details_no_assessment,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Missingness to MDHHS\\child_details_no_assessment.xlsx")
+
+child_details_no_assessment_with_offense_1 <- left_join(child_details_no_assessment,offenses_unique_id, by = "PERSON_ID") %>% 
+  filter(!is.na(ADJUDICATION_DATE)==TRUE) %>% 
+  distinct(PERSON_ID) 
+
+child_details_no_assessment_with_offense_2 <- inner_join(child_details, child_details_no_assessment_with_offense_1, by = "PERSON_ID")
+
+child_details_no_assessment_with_offense_2 <- left_join(child_details_no_assessment_with_offense_2,legal_status, by = "PERSON_ID")
+
+openxlsx::write.xlsx(child_details_no_assessment_with_offense_2,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Missingness to MDHHS\\child_details_no_assessment_has_offense_data.xlsx")
+```
+
+<br>
+
+## Missing Data in 'offenses' File/Excel Tab
+
+* 727/3,024 unique youth in 'child_details' file/Excel tab have no offense data (24% of youth in child_details have no jj_assessments data
+* There are 2,297 unique youth in 'assessments' data (this represents about 76% of all unique youth in the 'child_details'tab)
+* Output below illustrates match rate between 'child_details' and 'offenses' where 'x' represents 'child_details' table. Rows only in 'x' are records in 'child_details' with no corresponding records in 'offenses' table -- by joining on "PERSON_ID"
+* We are missing 'MiSACWIS_CASE_ID' in the 'offenses' tab/data file -- so we're unable to look at missingness across case right now
+
+### Joining 'offenses' to 'child_details'
+
+```{r warning=FALSE}
+### inner join offenses to child_details 
+child_details_offenses <- left_join(child_details, offenses, by = "PERSON_ID") %>% 
+  filter(is.na(ADJUDICATION_DATE)==TRUE) %>% 
+  select(PERSON_ID) %>% 
+  distinct()
+
+child_details_missing_initial_legal_status <- inner_join(child_details,send_to_mdhhs, by = c("PERSON_ID"="person_id"))
+
+openxlsx::write.xlsx(child_details_missing_initial_legal_status,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Missingness to MDHHS\\child_details_missing_initial_legal_status.xlsx")
+```
+
+<br>
+
+## Missing Data in 'placements' File/Excel Tab
+
+* Only 12/3,024 unique youth in 'child_details' file/Excel tab have no placement data (basically no meaningful missingness -- down from 12% of youth in child_details that had no placement data in prior data) 
+* Output below illustrates match rate between 'child_details' and 'placements' where 'x' represents 'child_details' table. Rows only in 'x' are records in 'child_details' with no corresponding records in 'placements' table -- by joining on "PERSON_ID"
+
+### Joining 'placements' to 'child_details'
+
+```{r warning=FALSE}
+### inner join placements to child_details 
+child_details_placements <- inner_join(child_details, placements, by = "PERSON_ID")
+```
+
+<br>
+
+## Missing Data in 'acad_evals' File/Excel Tab
+
+* 673/3,024 unique youth in 'child_details' file/Excel tab have no acad_evals data (22% of youth in child_details have no acad_evals data) 
+* Output below illustrates match rate between 'child_details' and 'acad_evals' where 'x' represents 'child_details' table. Rows only in 'x' are records in 'child_details' with no corresponding records in 'acad_evals' table -- by joining on "PERSON_ID"
+
+### Joining 'acad_evals' to 'child_details'
+
+```{r warning=FALSE}
+### inner join placements to child_details 
+child_details_acad_evals <- inner_join(child_details, acad_evals, by = "PERSON_ID")
+```
+
+<br>
+
+## Placement Data Diagram (from initial data transfer)
+
+Below is a data diagram outlining the placement data files we have received and processed -- noting the primary keys in each to de-duplicate as well as the columns used to join the relational data together. Including just in case it helps clear up what we're seeing and business rules we're using to clean and interpret the data.
+
+<br>
+
+```{r echo=FALSE, out.width = '100%'}
+knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Definitions\\michigan_placement_data_mapping.png")
+```
+
+<br>

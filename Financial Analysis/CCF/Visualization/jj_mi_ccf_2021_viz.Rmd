@@ -1,0 +1,719 @@
+---
+title: "MDHHS CCF Data, FY 2021 (excluding September 2021)"
+author: "Andrew Byrum"
+date: "12/10/2021"
+output: 
+    html_document:
+        df_print: paged
+        toc: true
+        toc_float: true
+---
+
+<br>
+
+**CCF Visualizations** 
+
+* Number of unique placements for FY 21: both in-home and out-of-home and in-home only
+* Dollars spent of in-home versus out-of-home
+* Anonymous county-level in-home versus out-of-home reimbursement amount
+
+<br>
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","tidylog","distill","formattable","ragg")
+```
+
+```{r include=FALSE}
+### import ccf fy 2016
+ccf_fy2016 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2016_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2016")
+
+### import ccf fy 2017
+ccf_fy2017 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2017_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2017")
+
+### import ccf fy 2018
+ccf_fy2018 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2018_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2018")
+
+### import ccf fy 2019
+ccf_fy2019 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2019_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2019")
+
+### import ccf fy 2020
+ccf_fy2020 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2020_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2020")
+
+### import ccf fy 2020
+ccf_fy2021 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2021_DataOuput-12032021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2021")
+
+### stack all ccf files -- columns all align
+df_ccf_stacked_2016_2021 <- rbind(ccf_fy2016,ccf_fy2017,ccf_fy2018,ccf_fy2019,ccf_fy2020,ccf_fy2021) %>% 
+  group_by_all() %>% 
+  mutate(dup_count = n()) %>% 
+  ungroup() %>% 
+  distinct(., .keep_all = TRUE) %>% ################### I'M TEMPORARILY DE-DUPING HERE ON PURE DUPLICATES (DUPS ACROSS ALL COLUMNS); THIS MAY CHANGE DEPENDING ON WHAT TEDDY SAYS, HOWEVER 
+  mutate(heading_total_flag = ifelse(str_detect(heading,"(?i)total"),1,0)) %>% ### flag rows where 'heading' has 'total' in it
+  filter(section != "Totals",
+         heading_total_flag==0) ### Teddy said to ignore 'Totals' sections; also removing all headings with 'total' -- these appear to simply tally up youth counts and reimbursement totals for the month by section? Confirm with Teddy. 
+```
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2021_only_cleaned <- df_ccf_stacked_2016_2021 %>%
+  filter(ccf_fy=="2021",
+         ccf_month_code!="SEPTEMBER") %>% ### just using 2021 and removing september claims
+  mutate(out_of_home_flag = ifelse(section %in% c("Family Foster Care","Independent Living","Institutional Care","Court Operated Facility","County/Court Operated Facilities"), 1,0)) %>% ### flag out-of-home facilities based on call with Teddy' -- he didn't mentioned either Court Operated Facility or County/Court Operated Facilities explicitly but instead included as part of institutional care so I still included (also are clearly out-of-home placements)
+  mutate(adjusted_reimbursed_amt_state_paid = ifelse(section!="Basic Grant", adjusted_reimbursed_amt/2, adjusted_reimbursed_amt)) %>% ### the state reimburses all claims, aside from Basic Grant claims, at 50% of claim amount. Basic grant claims are reimbursed 100%
+  mutate(section_clean = ifelse(section %in% c("Court Operated Facility","County/Court Operated Facilities"),"Institutional Care", section),
+         section_clean = ifelse(section %in% c("In-Home Care","Basic Grant"),"In Home", section_clean)) ### recoding 'Basic Grant' as 'In Home'; according to Teddy, 'Basic Grant' is similar to in-home-care, but with fewer restrictions (for counties with fewer than 75k people and tribes; capped at $15k -- and 100% reimbursed)
+
+```
+
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+## Tables
+
+### CCF Total Adjusted Reimbursement Amount by Section, FY 2021 (excluding September 2021)
+df_ccf_stacked_2020_total_amounts <- df_ccf_stacked_2021_only_cleaned %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)),
+            `Total Days of Care Provided` = sum(days_care_provided),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+df_ccf_stacked_2020_total_amounts_overall <- df_ccf_stacked_2021_only_cleaned %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)),
+            `Total Days of Care Provided` = sum(days_care_provided),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+  mutate("CCF Section" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_total_amounts_table <- rbind(df_ccf_stacked_2020_total_amounts,df_ccf_stacked_2020_total_amounts_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_total_amounts_table[c(2,4,1,3,5),], format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(5, bold = TRUE) %>% 
+  pack_rows("In Home*", 1, 1, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("Out of Home", 2, 4, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("", 5, 5, label_row_css = "background-color: #666; color: #fff;") %>% 
+  footnote(symbol = "In-home programming is also available, in some situations, to youth in out-of-home placements")
+```
+
+<br><br>
+
+## Out of Home Placements
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+theme_set(theme_minimal(20, base_family = "Calibri"))
+
+df_ccf_stacked_2020_total_amounts_to_plot <- df_ccf_stacked_2021_only_cleaned %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)),
+            `Total Days of Care Provided` = sum(days_care_provided),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+  ungroup()
+
+## use gather for line plot
+df_ccf_stacked_2020_total_amounts_plot <- df_ccf_stacked_2020_total_amounts_to_plot %>%
+  filter(section_clean!="In Home") %>% ### only out_of_home_flag==1
+  mutate(section_clean = factor(section_clean,
+                                levels = c("Institutional Care","Family Foster Care","Independent Living"))) 
+
+ggplot(data = df_ccf_stacked_2020_total_amounts_plot,
+            mapping = aes(x = section_clean, y = `Unique Children/Placements`, fill = section_clean)) + 
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("#007392","#007392","#007392","#007392")) +
+      scale_y_continuous(limits=c(min(0), 
+                                           max(df_ccf_stacked_2020_total_amounts_plot$`Unique Children/Placements`))) +
+    scale_x_discrete(labels = scales::wrap_format(15),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold")) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL) +
+    coord_flip() +
+  guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+  geom_label_repel(aes(label = scales::comma(as.numeric(`Unique Children/Placements`))),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "#007392",
+                   box.padding = 0.25,
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE)
+```
+
+<br><br>
+
+## In Home and Out of Home Placements
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2020_total_amounts_to_plot <- df_ccf_stacked_2021_only_cleaned %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)),
+            `Total Days of Care Provided` = sum(days_care_provided),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+   mutate(out_of_home_in_home = ifelse(section_clean %in% c("Family Foster Care","Independent Living","Institutional Care"), "Out of Home","In Home"))
+
+## use gather for line plot
+df_ccf_stacked_2020_total_amounts_plot <- df_ccf_stacked_2020_total_amounts_to_plot %>%
+  mutate(section_clean = factor(section_clean,
+                                levels = c("In Home","Institutional Care","Family Foster Care","Independent Living"))) 
+
+### plot
+ggplot(data = df_ccf_stacked_2020_total_amounts_plot,
+            mapping = aes(x = section_clean, y = `Unique Children/Placements`, fill = out_of_home_in_home)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#007392","#9ed4ef")) +
+  scale_y_continuous(label=scales::comma, limits=c(min(0), 
+                                           max(df_ccf_stacked_2020_total_amounts_plot$`Unique Children/Placements`))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold")) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) + 
+  geom_label_repel(aes(label = scales::comma(as.numeric(`Unique Children/Placements`))),
+                  direction = 'x',
+                  hjust = 0.6,
+                  label.padding = 0.3,
+                  box.padding = 0.15,
+                  fill = "white",
+                  color = c("#9ed4ef","#007392","#9ed4ef","#9ed4ef"),
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+```
+
+<br><br>
+
+## CCF In Home vs Out of Home Reimbursement
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+total_fy_21_ccf_state_paid_out <- sum(df_ccf_stacked_2021_only_cleaned$adjusted_reimbursed_amt_state_paid)
+
+
+df_ccf_stacked_2020_total_amounts_to_plot <- df_ccf_stacked_2021_only_cleaned %>% 
+   mutate(out_of_home_in_home = ifelse(section_clean %in% c("Family Foster Care","Independent Living","Institutional Care"), "Out of Home","In Home")) %>% 
+  group_by(out_of_home_in_home) %>% 
+  summarize(`Total Adj Reimburse Claim` = sum(adjusted_reimbursed_amt_state_paid),
+            proportion_of_total_claim_state_paid = `Total Adj Reimburse Claim`/total_fy_21_ccf_state_paid_out,
+            `Total Days of Care Provided` = sum(days_care_provided),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+  ungroup() 
+
+## use gather for line plot
+df_ccf_stacked_2020_total_amounts_plot <- df_ccf_stacked_2020_total_amounts_to_plot %>%
+  mutate(out_of_home_in_home = factor(out_of_home_in_home,
+                                levels = c("Out of Home","In Home"))) %>% 
+  mutate(year = "FY 2021")
+
+# ggplot(data = df_ccf_stacked_2020_total_amounts_plot, aes(y = proportion_of_total_claim_state_paid, x = year, fill = forcats::fct_rev(out_of_home_in_home))) + 
+#   geom_bar(stat = "identity", color = "gray80") +
+#   scale_x_discrete() +
+#   scale_y_continuous(labels = scales::percent) +
+#   scale_fill_manual(values = c("#007392","#9ed4ef")) +
+#   guides(fill = guide_legend(reverse = TRUE,
+#                              title.position = "top",
+#                              label.position = "bottom",
+#                              keywidth = 3,
+#                              nrow = 1)) +
+#   labs(x = NULL, y = NULL,
+#        fill = "CCF: Out of Home/ In Home Reimbursement",
+#        caption = NULL,
+#        title = NULL,
+#        subtitle = NULL) +
+#   theme(legend.position = "top",
+#         legend.title.align=0.5,
+#         axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
+#         axis.ticks.length = unit(0, "cm"),
+#         panel.grid.major.y = element_blank(),
+#         panel.grid.major.x = element_blank(),
+#         panel.grid.minor = element_blank()) +
+#   coord_flip() + 
+#   geom_label_repel(aes(label = scales::dollar_format(as.numeric(`Total Adj Reimburse Claim`))),
+#                    label.padding = 0.3,
+#                    box.padding = 0.15,
+#                    segment.color = NA,
+#                    fontface = "bold",
+#                    na.rm = TRUE,
+#                    show.legend = FALSE)
+
+### plot
+mi_ccf_plot_1 <- ggplot(data = df_ccf_stacked_2020_total_amounts_plot,
+            mapping = aes(x = out_of_home_in_home, y = `Total Adj Reimburse Claim`, fill = out_of_home_in_home)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#007392","#0db4e4")) +
+  scale_y_continuous(label=scales::label_number(prefix = "$", suffix = " M", scale = 1e-6),
+                     limits=c(
+                       min(0),
+                       max(df_ccf_stacked_2020_total_amounts_plot$`Total Adj Reimburse Claim` + 5000000))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+  geom_label(aes(x=2, y=27500000, label=scales::dollar((df_ccf_stacked_2020_total_amounts_plot$`Total Adj Reimburse Claim`[out_of_home_in_home=="Out of Home"]))),
+           color="#007392",
+           size=6, fontface="bold",fill = "white") +
+    geom_label(aes(x=1, y=25000000, label=scales::dollar((df_ccf_stacked_2020_total_amounts_plot$`Total Adj Reimburse Claim`[out_of_home_in_home=="In Home"]))),                 
+           color="#0db4e4", 
+           size=6, fontface="bold",fill = "white") +
+    theme(legend.position = "top",
+        legend.title.align=0.5,
+        strip.text.x = element_text(face = "bold"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = "none") +
+  geom_label_repel(aes(label = scales::percent(as.numeric(proportion_of_total_claim_state_paid))),
+                  direction = 'x',
+                  hjust = 0.6,
+                  size=5,
+                  label.padding = 0.3,
+                  box.padding = 0.15,
+                  fill = "white",
+                  color = c("#0db4e4","#007392"),
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\Financial\\CCF Viz\\\\mi_ccf_plot_1.png", mi_ccf_plot_1, width = 8, height = 6)
+```
+
+<br><br>
+
+## CCF In Home vs Out of Home Reimbursement -- broken down further
+```{r echo=FALSE,message=FALSE,warning=FALSE} 
+total_fy_21_ccf_state_paid_out <- sum(df_ccf_stacked_2021_only_cleaned$adjusted_reimbursed_amt_state_paid)
+
+
+df_ccf_stacked_2020_total_amounts_to_plot <- df_ccf_stacked_2021_only_cleaned %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = sum(adjusted_reimbursed_amt_state_paid),
+            proportion_of_total_claim_state_paid = `Total Adj Reimburse Claim`/total_fy_21_ccf_state_paid_out,
+            `Total Days of Care Provided` = sum(days_care_provided),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+     mutate(out_of_home_in_home = ifelse(section_clean %in% c("Family Foster Care","Independent Living","Institutional Care"), "Out of Home","In Home")) 
+
+## use gather for line plot
+df_ccf_stacked_2020_total_amounts_plot <- df_ccf_stacked_2020_total_amounts_to_plot %>%
+  mutate(section_clean = factor(section_clean,
+                                levels = c("In Home","Institutional Care","Family Foster Care","Independent Living"))) 
+
+
+### plot
+mi_ccf_plot_3 <- ggplot(data = df_ccf_stacked_2020_total_amounts_plot,
+            mapping = aes(x = section_clean, y = `Total Adj Reimburse Claim`, fill = out_of_home_in_home)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#007392","#0db4e4")) +
+  scale_y_continuous(label=scales::label_number(prefix = "$", suffix = " M", scale = 1e-6),
+                     limits=c(
+                       min(0),
+                       max(df_ccf_stacked_2020_total_amounts_plot$`Total Adj Reimburse Claim` + 5000000))) +
+  # scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+  # geom_label(aes(x=2, y=27500000, label=scales::dollar((df_ccf_stacked_2020_total_amounts_plot$`Total Adj Reimburse Claim`[out_of_home_in_home=="Out of Home"]))),
+  #          color="#007392",
+  #          size=6, fontface="bold",fill = "white") +
+  #   geom_label(aes(x=1, y=25000000, label=scales::dollar((df_ccf_stacked_2020_total_amounts_plot$`Total Adj Reimburse Claim`[out_of_home_in_home=="In Home"]))),                 
+  #          color="#0db4e4", 
+  #          size=6, fontface="bold",fill = "white") +
+    theme(legend.position = "top",
+        legend.title.align=0.5,
+        strip.text.x = element_text(face = "bold"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = "none") +
+  geom_label_repel(aes(label = scales::percent(as.numeric(proportion_of_total_claim_state_paid))),
+                  direction = 'x',
+                  hjust = 0.6,
+                  size=5,
+                  label.padding = 0.3,
+                  box.padding = 0.15,
+                  fill = "white",
+                  color = c("#9ed4ef","#007392","#9ed4ef","#9ed4ef"),
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\Financial\\CCF Viz\\\\mi_ccf_plot_1.png", mi_ccf_plot_1, width = 8, height = 6)
+```
+
+<br><br>
+
+```{r include=FALSE}
+### pull census/acs data via tidycensus package
+
+### set census api key via tidycensus package
+### this allows us to pull census/acs data via the tidycensus package
+tidycensus::census_api_key("1ba246a0db6cfbd596219470af425fe932cf064b", install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+
+### read in county-level cdc/acs juvenile population estimates, split by race/ethnicity and sex, for base juvenile population rate calculations
+mi_age_10_17_sex_race_final <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt" , delim = "|") %>% 
+  mutate(geoid = paste0(state_code,county_code))
+
+### pull other acs/census data for additional context/mapping, if wanted
+
+### overall population
+mi_overall_pop <- tidycensus::get_acs(geography = "County",
+                                              state = "MI",
+                                              variables = "B01003_001",
+                                              geometry = FALSE) %>%
+  clean_names() %>%
+  dplyr::select(geoid,name,estimate) %>%
+  dplyr::rename(estimate_total_pop = estimate)
+
+### weighted estimate of percentage of census tracts residents living below federal poverty threshold
+mi_poverty_status <- tidycensus::get_acs(geography = "County", 
+                                              state = "MI",
+                                              variables = "S1701_C03_001", 
+                                              geometry = FALSE) %>% 
+  clean_names() %>% 
+  dplyr::select(geoid,estimate) %>% 
+  dplyr::rename(estimate_below_poverty = estimate)
+
+### weighted estimate of income
+mi_median_income <- tidycensus::get_acs(geography = "County", 
+                                             state = "MI",
+                                             variables = "S1901_C01_012", 
+                                             geometry = FALSE) %>% 
+  clean_names() %>% 
+  dplyr::select(geoid,estimate) %>% 
+  dplyr::rename(estimate_income = estimate)
+
+
+### weighted estimate of percentage of race from 2010 census; couldn't find overall race estimates from 2018 ACS
+### pulled estimated counts and constructed percent estimate
+### these are the ids of race variables that we want to pull 
+race_vars <- c(estimate_white = "P005003",
+               estimate_black = "P005004",
+               estimate_asian = "P005006",
+               estimate_hispanic = "P004003")
+
+mi_race_2010 <- tidycensus::get_decennial(geography = "County", 
+                                               state = "MI",
+                                               variables = race_vars,
+                                               summary_var = "P001001",
+                                               geometry = FALSE) %>% 
+  clean_names() %>% 
+  mutate(estimate = (value/summary_value)*100) ###create percent estimate from estimated counts
+
+### pivot race file to be wide and unique by census tract 
+mi_race_2010 %<>%
+  dplyr::select(geoid,variable,estimate) %>% 
+  spread(variable,estimate, fill = NA) 
+```
+
+```{r include=FALSE}
+### join all acs variables together in one file 
+mi_acs_census_county <- left_join(mi_poverty_status, mi_median_income, by="geoid")
+
+mi_acs_census_county <- left_join(mi_acs_census_county, mi_overall_pop, by="geoid")
+
+mi_acs_census_county <- left_join(mi_acs_census_county, mi_race_2010, by="geoid")
+
+mi_acs_census_county <- left_join(mi_acs_census_county, mi_age_10_17_sex_race_final, by="geoid")
+```
+
+```{r include=FALSE}
+### read in county-level iowa data to create county,state, geoid crosswalk with acs/census data 
+### this is the official iowa county shapefile, obtained here: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html 
+### this is not used for mapping, however, hence we remove geography below; it's just a crosswalk across county name, geoid, and county fip code
+mi_geo_county <- read_sf("C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\Geospatial_Mapping\\US County Geo Data\\tl_2019_us_county\\tl_2019_us_county.shp") %>%
+  clean_names() %>% 
+  filter(statefp=="26") %>% ### filter on michigan using state fips code (26)
+  dplyr::select(geoid, county_name_short=name, county_fip=countyfp) 
+
+### convert to dataframe and remove geometry -- this will not be 
+mi_geo_county <- as.data.frame(mi_geo_county) %>%
+    dplyr::select(-(geometry))
+```
+
+```{r include=FALSE}
+### merge county code/geoid crosswalk to acs data
+mi_acs_census_county_crosswalk <- inner_join(mi_acs_census_county,mi_geo_county,by = "geoid")
+
+### county-level estimates
+
+### clean up acs/census estimates for eventual use as map labels
+mi_acs_census_county_crosswalk_full <- mi_acs_census_county_crosswalk %>% 
+    group_by(county_name_short) %>% 
+    summarize(estimate_total_pop = sum(estimate_total_pop, na.rm=TRUE),
+              estimate_10_17_pop = sum(overall_10_17_population, na.rm=TRUE),
+              estimate_below_poverty_mean = round(mean(estimate_below_poverty, na.rm=TRUE),digits = 1),
+              estimate_income_median = round(mean(estimate_income, na.rm=TRUE),digits = 1),
+              estimate_asian_mean = round(mean(estimate_asian, na.rm=TRUE),digits = 1),
+              estimate_black_mean = round(mean(estimate_black, na.rm=TRUE),digits = 1),
+              estimate_hispanic_mean = round(mean(estimate_hispanic, na.rm=TRUE),digits = 1),
+              estimate_white_mean = round(mean(estimate_white, na.rm=TRUE),digits = 1)) %>% 
+    ungroup() 
+
+### CCF Total Adjusted Reimbursement Amount by section and county, FY 2020 
+df_ccf_stacked_2020_total_amounts_map <- df_ccf_stacked_2021_only_cleaned %>% 
+  mutate(out_of_home_in_home = ifelse(section_clean %in% c("Family Foster Care","Independent Living","Institutional Care"), "Out of Home","In Home")) %>% 
+  group_by(agency_name) %>% 
+  summarize(total_state_paid_in_home = sum(adjusted_reimbursed_amt_state_paid[out_of_home_in_home=="In Home"]),
+            total_state_paid_out_of_home = sum(adjusted_reimbursed_amt_state_paid[out_of_home_in_home=="Out of Home"])) %>% 
+  ungroup() %>% 
+  dplyr::mutate(county_name_short =  gsub(" County", "", agency_name)) 
+
+### calculate rates using population estimates by county from 2019 American Community Survey
+mi_acs_census_county_no_geo_rates <- mi_acs_census_county_crosswalk_full %>% 
+  left_join(df_ccf_stacked_2020_total_amounts_map, by = "county_name_short") 
+
+### CCF Total Adjusted Reimbursement Amount by section and county, FY 2020 
+mi_acs_census_county_no_geo_rates %<>% 
+  mutate(total_state_paid_per_10_17_youth_in_home = total_state_paid_in_home/estimate_10_17_pop,
+            total_state_paid_per_10_17_youth_out_of_home = total_state_paid_out_of_home/estimate_10_17_pop)
+```
+
+```{r include=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
+# <br><br>
+# 
+# ## County by County Variation in In Home/Out of Home State Reimbursement, Raw Dollar Figure (excludes Wayne)
+# 
+# Raw dollar figure won't work for plot b/c there's too much variation from smaller counties to larger ones, even with Wayne excluded
+
+mi_acs_census_county_no_geo_rates_no_wayne <- mi_acs_census_county_no_geo_rates %>% 
+  filter(county_name_short!="Wayne")
+
+### plot
+ggplot(data = mi_acs_census_county_no_geo_rates_no_wayne,
+            mapping = aes(x = total_state_paid_in_home, y = total_state_paid_out_of_home)) + 
+  geom_point(shape = 16, size = 5, show.legend = FALSE, color = "#007392", alpha = .7) +
+  scale_y_continuous(label=scales::dollar_format(accuracy=1),
+                     limits=c(
+                       min(0),
+                       max(mi_acs_census_county_no_geo_rates_no_wayne$total_state_paid_out_of_home))) +
+  scale_x_continuous(label=scales::dollar_format(accuracy=1),
+                     limits=c(
+                       min(0),
+                       max(mi_acs_census_county_no_geo_rates_no_wayne$total_state_paid_in_home+500000))) +    
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        strip.text.x = element_text(face = "bold")) +
+  theme_minimal() +
+  labs(y = "Out of Home", x = "In Home",
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) 
+```
+
+<br><br>
+
+## County by County Variation in In Home/Out of Home State Reimbursement, $ per youth 10-17 in county
+
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### plot
+mi_ccf_plot_2 <- ggplot(data = mi_acs_census_county_no_geo_rates,
+            mapping = aes(x = total_state_paid_per_10_17_youth_in_home, y = total_state_paid_per_10_17_youth_out_of_home)) + 
+  geom_point(shape = 16, size = 5, show.legend = FALSE, color = "#00475d", alpha = .7) +
+  coord_fixed() +
+  geom_abline(intercept = 0, slope = 1, color = "#007392", size = 1.5) +
+  annotate("text", x = 160, y = 115, label = "Line represents 1:1 in home to \nout of home reimbursement", colour = "#007392", size = 4.25) +
+  scale_y_continuous(label=scales::dollar_format(accuracy=1),
+                     limits=c(
+                       min(0),
+                       max(mi_acs_census_county_no_geo_rates$total_state_paid_per_10_17_youth_out_of_home))) +
+  scale_x_continuous(label=scales::dollar_format(accuracy=1),
+                     limits=c(
+                       min(0),
+                       max(mi_acs_census_county_no_geo_rates$total_state_paid_per_10_17_youth_in_home))) +    
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        strip.text.x = element_text(face = "bold")) +
+  theme_minimal() +
+  labs(y = "Out of Home", x = "In Home",
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) 
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\Financial\\CCF Viz\\mi_ccf_plot_2.png", mi_ccf_plot_2, width = 8, height = 6)
+```
+
+```{r include=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
+## County by County Variation in In Home/Out of Home State Reimbursement, $ per youth 10-17 in county
+
+In this plot, the size of the point includes the youth population size in the county relative to other counties in Michigan -- perhaps needlessly confusing, though
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- mi_acs_census_county_no_geo_rates %>%
+  pull(estimate_10_17_pop) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_pop <- c("9,700+","3,520 to 9,700","1,805 to 3,520", "Less than 1,805")
+
+### create a new variable with the specified quantiles
+mi_acs_census_county_no_geo_rates %<>%
+  mutate(estimate_10_17_pop_quartile = cut(-estimate_10_17_pop,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_pop,
+                               include.lowest = T)) 
+
+### plot
+ggplot(data = mi_acs_census_county_no_geo_rates,
+            mapping = aes(x = total_state_paid_per_10_17_youth_in_home, y = total_state_paid_per_10_17_youth_out_of_home, size = estimate_10_17_pop_quartile)) + 
+  geom_point(shape = 16, show.legend = FALSE, color = "#00475d", alpha = .7) +
+  coord_fixed() +
+  geom_abline(intercept = 0, slope = 1, color = "#007392", size = 1.5) +
+  annotate("text", x = 160, y = 115, label = "Line represents 1:1 in home to \nout of home reimbursement", colour = "#007392", size = 3.5) +
+  scale_y_continuous(label=scales::dollar_format(accuracy=1),
+                     limits=c(
+                       min(0),
+                       max(mi_acs_census_county_no_geo_rates$total_state_paid_per_10_17_youth_out_of_home))) +
+  scale_x_continuous(label=scales::dollar_format(accuracy=1),
+                     limits=c(
+                       min(0),
+                       max(mi_acs_census_county_no_geo_rates$total_state_paid_per_10_17_youth_in_home))) +    
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        strip.text.x = element_text(face = "bold"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
+  theme_minimal() +
+  labs(y = "Out of Home", x = "In Home",
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) 
+```
+
+<br><br>
+
+## County by County Variation: % of reimbursement for out of home placement
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### % of reimbursement $ that is for out of home
+mi_acs_census_county_no_geo_rates %<>%
+  mutate(total_claim_amount = total_state_paid_in_home + total_state_paid_out_of_home,
+         percent_paid_out_of_home = total_state_paid_out_of_home/total_claim_amount)
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- mi_acs_census_county_no_geo_rates %>%
+  pull(percent_paid_out_of_home) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_pop <- c("58%+","25% to 58%","12% to 25%", "Less than 12%")
+
+### create a new variable with the specified quantiles
+mi_acs_census_county_no_geo_rates %<>%
+  mutate(percent_paid_out_of_home_quartile = cut(-percent_paid_out_of_home,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_pop,
+                               include.lowest = T)) %>% 
+  arrange(estimate_income_median) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+# df_ccf_stacked_2020_total_amounts_to_plot <- df_ccf_stacked_2021_only_cleaned %>% 
+#   group_by(section_clean) %>% 
+#   summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)),
+#             `Total Days of Care Provided` = sum(days_care_provided),
+#             `Unique Children/Placements` = sum(total_children[ccf_month_code=="AUGUST"]), ### this file ends in august (as september -- the last month in the fiscal year -- was not complete at the time of analysis)
+#             `Total Placements/Month` = sum(monthly_children),
+#             `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/sum(days_care_provided)),
+#             `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Unique Children/Placements`),
+#             `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt_state_paid)/`Total Placements/Month`)) %>% 
+#   ungroup() %>% 
+#    mutate(out_of_home_in_home = ifelse(section_clean %in% c("Family Foster Care","Independent Living","Institutional Care"), "Out of Home","In Home"))
+# 
+# ## use gather for line plot
+# df_ccf_stacked_2020_total_amounts_plot <- df_ccf_stacked_2020_total_amounts_to_plot %>%
+#   mutate(section_clean = factor(section_clean,
+#                                 levels = c("In Home","Institutional Care","Family Foster Care","Independent Living"))) 
+
+### plot
+mi_ccf_plot_4 <- ggplot(data = mi_acs_census_county_no_geo_rates,
+            mapping = aes(x = reorder(county_anonymous, percent_paid_out_of_home), y = percent_paid_out_of_home, fill = percent_paid_out_of_home_quartile)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(label=scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(1))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 55, y = .80, label = "Each bar represents one county's\n FY 2021 CCF reimbursement", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "% of Total CCF Reimbursement\n for Out of Home Placement") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\Financial\\CCF Viz\\mi_ccf_plot_4.png", mi_ccf_plot_4, width = 8, height = 6)
+```
+
+<br><br>

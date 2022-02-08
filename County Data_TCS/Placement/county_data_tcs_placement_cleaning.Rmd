@@ -1,0 +1,130 @@
+---
+title: "mi_tcs_county_placement_cleaning"
+author: "Andrew Byrum"
+date: "2/8/2022"
+output: html_document
+---
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog")
+````
+
+1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
+```{r include=FALSE}
+# library(remotes)
+# 
+# remotes::install_github("CSGJCResearch/csgjcr")
+
+# set csg path -- until i am able to download csgjcr packages
+csg_path <- "C:/Users/abyrum/The Council of State Governments/JC Research - Documents/JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS"
+
+# cases
+tcs_cases <- read_xlsx(
+  file.path(
+    csg_path, "TCS_Cases_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+# charges
+tcs_charges <- read_xlsx(
+  file.path(
+    csg_path, "TCS_Charges_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+# dispositions
+tcs_dispositions <- read_xlsx(
+  file.path(
+    csg_path, "TCS_DispositionsPerCharge_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+# # sentencing -- this is "Sentencing results on adult criminal FJ and DJ sentencings."
+# tcs_sentencing <- read_xlsx(
+#   file.path(
+#     csg_path, "TCS_Sentencings_A.xlsx"),
+#   .name_repair = make_clean_names
+#   ) %>%
+#   mutate(across(where(is.POSIXct), as.Date))
+
+# placements
+tcs_placements <- read_xlsx(
+  file.path(
+    csg_path, "TCS_Placements_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+```
+
+# 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
+
+* `juvenile_nbr` (unique individual ID) and `case_number` (unique case ID, though not sure of "case" definition) appear to be main primary key across files, but will need to use dates at the very least to create pre- and post- disposition/adjudication distinctions in placement data *
+
+* maybe also use `jurist_nbr` ("The professional number associated to the Judge assigned to the case."), either `case_year` or `year`, `tc_sreport_court_jcl` ("AS400 caseload report court code."),
+
+* what's the difference between `case_year` ("Year the case was filed.") and `year` ("Year of the caseload being run/reported.")? and why does the data dictionary indicate that `year` "Must be included in some form to link tables" but not `case_year`?
+
+* two unique juvenile_nbr's can have one case_number? 
+
+* what is `ordertype` in the placements data? many records with value of `ORD` as opposed to `PCN` are missing start dates and/or end dates...
+
+
+**seemingly important dates:**
+
+* offense_dt
+* case_file_dt
+* adjudication_dt
+* arraignment_dt
+* disposition
+* case_reopen_dt
+* case_closed_dt
+
+```{r include=FALSE}
+# de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
+tcs_cases_de_dup <- tcs_cases %>%
+  filter(!is.na(juvenile_nbr)==TRUE,
+         juvenile_nbr!=0, ### there are a handful of records where juvenile_nbr=0; appears to be data error as the records don't consistently share other identifying info like dates and county
+         !is.na(case_number)==TRUE) %>% 
+  distinct(juvenile_nbr,case_number,offense_dt,.keep_all = TRUE)
+
+# de-dup charges file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped
+
+# issue: there are 1,288 records in the cases df that do not appear at all in the charges df; further there is no juvenile_nbr in the charges data which is concerning for the merge b/c i have seen instances where one case_number has two different juvenile_nbr's attached to it; not sure if we can use these data
+tcs_charges_de_dup <- tcs_charges %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(id)==TRUE) %>% 
+  dplyr::rename(case_number = case_id) %>% 
+  distinct(id,case_number,.keep_all = TRUE)
+
+# de-dup dispositions file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped -- will have to further de-dup by disposition later
+
+# looks like there are some pure dups
+tcs_dispositions_de_dup <- tcs_dispositions %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(name_nbr)==TRUE) %>% 
+  dplyr::rename(case_number = case_id,
+                juvenile_nbr= name_nbr) %>% 
+  distinct(juvenile_nbr,case_number,charge_count,charge_count,dispo_dt,event_nbr,.keep_all = TRUE)
+  
+
+# de-dup placements file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped 
+
+# looks like there are some pure dups
+tcs_placements_de_dup <- tcs_placements %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(name_nbr)==TRUE) %>% 
+  dplyr::rename(case_number = case_id,
+                juvenile_nbr= name_nbr) %>% 
+  distinct(name_nbr,case_number,.keep_all = TRUE)
+```
+
+```{r}
+tcs_cases_de_dup_charges <- left_join(tcs_cases_de_dup,tcs_charges_de_dup,by="case_number")
+```
+

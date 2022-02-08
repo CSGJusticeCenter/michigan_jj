@@ -1,0 +1,289 @@
+---
+title: "MDHHS CCF Data, 2016-2019"
+author: "Andrew Byrum"
+date: "November 2021"
+output: 
+    html_document:
+        df_print: paged
+---
+
+<br>
+
+*What we can do with what we have in hand (FY 2016-2020):* 
+
+* Determine how much the state paid to reimburse county claims for JJ and Abuse/Neglect placements annually (2016-2019). As noted below, this is a reflection of CCF claims and not necessarily actual placements/programming within a given fiscal year (claims are often delayed, varying by county) 
+* Calculate the average cost per submitted claim for kid/placements and days claimed for each fiscal year. 
+* Disaggregate the above figures by type of out-of-home placement: Institutional Care, Family Foster Care, Independent Living (and maybe public vs. private for each) 
+
+*Caveats*
+
+* For 2016-2019, we cannot disentangle JJ and Abuse/Neglect claims 
+* There is a lot of variation in how/when counties made claims to the state for reimbursement. For example, some counties submit claims monthly, others might do so bi-monthly or quarterly (we were told Wayne had an 8 month lag in their claims). This makes is it hard to determine how many kids were served per month or year because the state could be reimbursing counties for kids served in previous months or fiscal years. 
+* This variation also means how much the state pays out annually is not necessarily a reflection of how many youth were served during the year—making both county-to-county comparison and year-to-year comparison difficult  
+* In 2020 the state moved to a “state pays first” financing model & we should be able to distinguish between JJ and abuse neglect, BUT there was a transition period that extended through 2020 during which the state still reimbursed 2019 claims submitted in 2020. 
+
+*What we think we can do if we get FY 2021 data:* 
+
+* Determine how much the state paid for JJ placements by county, month, placement type. 
+* From our conversation with Teddy and Kelly, there are fewer delayed claims (I.e. costs from FY 2020 that are claimed in FY 2021) 
+* Calculate the average cost per kid per month in an out of home JJ placement. 
+
+*Caveats*  
+
+* We don’t know if we can get 2021 data in time to analyze it 
+* It won’t be complete (11 counties are missing) 
+* It’s only one year of data (that happens to be during a weird pandemic year) 
+
+<br>
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","tidylog","distill","formattable")
+```
+
+```{r include=FALSE}
+### import ccf fy 2016
+ccf_fy2016 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2016_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2016")
+
+### import ccf fy 2017
+ccf_fy2017 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2017_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2017")
+
+### import ccf fy 2018
+ccf_fy2018 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2018_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2018")
+
+### import ccf fy 2019
+ccf_fy2019 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2019_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2019")
+
+### import ccf fy 2020
+ccf_fy2020 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2020_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2020")
+
+### stack all ccf files -- columns all align
+df_ccf_stacked_2016_2020 <- rbind(ccf_fy2016,ccf_fy2017,ccf_fy2018,ccf_fy2019,ccf_fy2020) %>% 
+  group_by_all() %>% 
+  mutate(dup_count = n()) %>% 
+  ungroup() %>% 
+  distinct(., .keep_all = TRUE) %>% ################### I'M TEMPORARILY DE-DUPING HERE ON PURE DUPLICATES (DUPS ACROSS ALL COLUMNS); THIS MAY CHANGE DEPENDING ON WHAT TEDDY SAYS, HOWEVER 
+  mutate(heading_total_flag = ifelse(str_detect(heading,"(?i)total"),1,0)) %>% ### flag rows where 'heading' has 'total' in it
+  filter(section != "Totals",
+         heading_total_flag==0) ### Teddy said to ignore 'Totals' sections; also removing all headings with 'total' -- these appear to simply tally up youth counts and reimbursement totals for the month by section? Confirm with Teddy. 
+```
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2016_2020_only_cleaned <- df_ccf_stacked_2016_2020 %>%
+  filter(ccf_fy!="2020") %>% ### just using 2020 for now -- double checking 2019 with Teddy
+  mutate(out_of_home_flag = ifelse(section %in% c("Family Foster Care","Independent Living","Institutional Care","Court Operated Facility","County/Court Operated Facilities"), 1,0)) %>%  ### flag out-of-home facilities based on call with Teddy' -- he didn't mentioned either Court Operated Facility or County/Court Operated Facilities explicitly but instead included as part of institutional care so I still included (also are clearly out-of-home placements)
+  mutate(section_clean = ifelse(section %in% c("Court Operated Facility","County/Court Operated Facilities"),"Institutional Care", section),
+         section_clean = ifelse(section == "In-Home Care","In Home", section_clean))
+```
+
+## Preliminary Tables
+
+<br>
+
+### CCF Out-of-Home Adjusted Reimbursement Amount Over Time, FY 2016-2019
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2020_total_amounts_month <- df_ccf_stacked_2016_2020_only_cleaned %>% 
+  filter(out_of_home_flag==1) %>% 
+  group_by(section_clean) %>% 
+  summarize(`FY 2016` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2016"])),
+            `FY 2017` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2017"])),
+            `FY 2018` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2018"])),
+            `FY 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2019"]))) %>% 
+  ungroup() %>% 
+  dplyr::rename("Out of Home Placement" = section_clean)
+
+df_ccf_stacked_2020_total_amounts_month_overall <- df_ccf_stacked_2016_2020_only_cleaned %>% 
+  filter(out_of_home_flag==1) %>% 
+  summarize(`FY 2016` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2016"])),
+            `FY 2017` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2017"])),
+            `FY 2018` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2018"])),
+            `FY 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_fy=="2019"]))) %>%  
+  mutate("Out of Home Placement" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_total_amounts_month_table <- rbind(df_ccf_stacked_2020_total_amounts_month,df_ccf_stacked_2020_total_amounts_month_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_total_amounts_month_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(4, bold = TRUE)
+```
+
+<br><br>
+
+### CCF Total Adjusted Reimbursement Amount by Section, FY 2019 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2020_total_amounts <- df_ccf_stacked_2016_2020_only_cleaned %>% 
+  filter(ccf_fy=="2019") %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+df_ccf_stacked_2020_total_amounts_overall <- df_ccf_stacked_2016_2020_only_cleaned %>% 
+    filter(ccf_fy=="2019") %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  mutate("CCF Section" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_total_amounts_table <- rbind(df_ccf_stacked_2020_total_amounts,df_ccf_stacked_2020_total_amounts_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_total_amounts_table[c(1,3,2,4,5,6),], format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE) %>% 
+  pack_rows("In Home*", 1, 2, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("Out of Home", 3, 5, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("", 6, 6, label_row_css = "background-color: #666; color: #fff;") %>% 
+  footnote(symbol = "In-home programming is also available, in some situations, to youth in out-of-home placements")
+```
+
+<br><br>
+
+### CCF Total Adjusted Reimbursement Amount by Section and Subsection, FY 2019 
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### recode NA as "Missing" for analysis of subsection as we want to report out everything including the NAs
+df_ccf_stacked_2020_only_cleaned_subsection_recode <- df_ccf_stacked_2016_2020_only_cleaned %>% 
+  mutate(subsection = ifelse(is.na(subsection)==TRUE, "Missing", subsection))
+
+### family foster care, overall
+df_ccf_foster_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019") %>% 
+  filter(section_clean=="Family Foster Care") %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### family foster care, by subsection
+df_ccf_foster_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019") %>% 
+  filter(section_clean=="Family Foster Care") %>% 
+  group_by(subsection) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_foster_final <- rbind(df_ccf_foster_overall,df_ccf_foster_subsection)
+
+### institutional care, overall
+df_ccf_institution_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019") %>% 
+  filter(section_clean=="Institutional Care") %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### institutional care, by subsection
+df_ccf_institution_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019") %>% 
+  filter(section_clean=="Institutional Care") %>% 
+  group_by(subsection) %>% 
+   summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_institution_final <- rbind(df_ccf_institution_overall,df_ccf_institution_subsection)
+
+### independent living, overall
+df_ccf_independent_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019") %>% 
+  filter(section_clean=="Independent Living") %>% 
+  group_by(section_clean) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### independent living, by subsection
+df_ccf_independent_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019") %>% 
+  filter(section_clean=="Independent Living") %>% 
+  group_by(subsection) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_independent_final <- rbind(df_ccf_independent_overall,df_ccf_independent_subsection)
+
+
+### overall 
+df_ccf_stacked_2020_total_amounts_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+      filter(ccf_fy=="2019",
+             out_of_home_flag==1) %>% 
+  summarize(`Total Adj Reimburse Claim` = scales::dollar(sum(adjusted_reimbursed_amt)),
+            `Unique Children/Placements` = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            `Total Placements/Month` = sum(monthly_children),
+            `Adj Reimburse Claim Per Days Claimed` = scales::dollar(sum(adjusted_reimbursed_amt)/sum(days_care_provided)),
+            `Adj Reimburse Claim Per Unique Youth/Placement` = scales::dollar(sum(adjusted_reimbursed_amt)/`Unique Children/Placements`),
+            `Adj Reimburse Claim Per Unique Placement/Month` = scales::dollar(sum(adjusted_reimbursed_amt)/`Total Placements/Month`)) %>% 
+  mutate("CCF Section" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_subsection_table <- rbind(df_ccf_foster_final,df_ccf_institution_final,df_ccf_independent_final,df_ccf_stacked_2020_total_amounts_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_subsection_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(14, bold = TRUE) %>% 
+  pack_rows("Out of Home", 1, 13, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("", 14, 14, label_row_css = "background-color: #666; color: #fff;") %>% 
+  add_indent(c(2,3,4,5,7,8,9,10,11,13))
+```
+
+<br><br>

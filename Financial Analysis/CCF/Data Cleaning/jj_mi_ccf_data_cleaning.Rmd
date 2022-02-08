@@ -1,0 +1,815 @@
+---
+title: "jj_mi_mdhhs_ccf"
+author: "Andrew Byrum"
+date: "November 2021"
+output: 
+    html_document:
+        df_print: paged
+        toc: true
+        toc_float: true
+---
+
+**CCF data points:** 
+
+* County
+* Month
+* Section (type of placement; family foster care, institutional care, and independent living are considered *out-of-home* while basic grant and in home are considered *in home* -- however, youth placed out of home can still receive programming labelled as in-home)
+* Subsection (description of section; only populated for family foster care and some institutional care records -- for family foster care, include 'A. Court or Tribal Supervised', 'B. Private Agency - In-State', and 'C. Private Agency - Out-Of-State' and for institutional care, includes either 'A. Another County's Institution (Court or MDHHS)' or missing data/blanks)
+* Heading (features programming details for in home sections -- however, there is not consistency is coding/naming conventions)
+* Total children (unique by youth and placement; two placements for one child would count twice towards 'total children')
+* Monthly children (unique youth placed within a given month -- by county, section, subsection)
+* Days care provided: reliability TBD
+* Adjusted reimbursed amount: amount/claim on which MDHHS bases 50% reimbursement (i.e. it's double what MDHHS actually paid) -- except...
+
+<br>
+
+**What's possible with CCF data for FY 2020 (prior data has mix of abuse/neglect cases and jj cases):**
+
+* Within fiscal year: total children by section/subsection by county by month
+
+* Unique children by month by placement
+
+* 50%
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","tidylog","distill","formattable")
+```
+
+```{r include=FALSE}
+### import ccf fy 2016
+ccf_fy2016 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2016_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2016")
+
+### import ccf fy 2017
+ccf_fy2017 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2017_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2017")
+
+### import ccf fy 2018
+ccf_fy2018 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2018_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2018")
+
+### import ccf fy 2019
+ccf_fy2019 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2019_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2019")
+
+### import ccf fy 2020
+ccf_fy2020 <- openxlsx::read.xlsx("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Financial\\ccf_data_for_r\\FY2020_DataOuput-11232021.xlsx", sheet = "Export Worksheet") %>% 
+  clean_names() %>% 
+  mutate(ccf_fy = "2020")
+
+### stack all ccf files -- columns all align
+df_ccf_stacked_2016_2020 <- rbind(ccf_fy2016,ccf_fy2017,ccf_fy2018,ccf_fy2019,ccf_fy2020) %>% 
+  group_by_all() %>% 
+  mutate(dup_count = n()) %>% 
+  ungroup() %>% 
+  distinct(., .keep_all = TRUE) %>% ################### I'M TEMPORARILY DE-DUPING HERE ON PURE DUPLICATES (DUPS ACROSS ALL COLUMNS); THIS MAY CHANGE DEPENDING ON WHAT TEDDY SAYS, HOWEVER 
+  mutate(heading_total_flag = ifelse(str_detect(heading,"(?i)total"),1,0)) %>% ### flag rows where 'heading' has 'total' in it
+  filter(section != "Totals",
+         heading_total_flag==0) ### Teddy said to ignore 'Totals' sections; also removing all headings with 'total' -- these appear to simply tally up youth counts and reimbursement totals for the month by section? Confirm with Teddy. 
+```
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2020_only_cleaned <- df_ccf_stacked_2016_2020 %>%
+  filter(ccf_fy=="2020") %>% ### just using 2020 for now -- double checking 2019 with Teddy
+  mutate(out_of_home_flag = ifelse(section %in% c("Family Foster Care","Independent Living","Institutional Care","Court Operated Facility","County/Court Operated Facilities"), 1,0)) %>%  ### flag out-of-home facilities based on call with Teddy' -- he didn't mentioned either Court Operated Facility or County/Court Operated Facilities explicitly but instead included as part of institutional care so I still included (also are clearly out-of-home placements)
+  mutate(section_clean = ifelse(section %in% c("Court Operated Facility","County/Court Operated Facilities"),"Institutional Care", section),
+         section_clean = ifelse(section == "In-Home Care","In Home", section_clean))
+
+```
+
+## Tables
+
+### CCF Total Adjusted Reimbursement Amount by Section, FY 2020 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2020_total_amounts <- df_ccf_stacked_2020_only_cleaned %>% 
+  group_by(section_clean) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+df_ccf_stacked_2020_total_amounts_overall <- df_ccf_stacked_2020_only_cleaned %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  mutate("CCF Section" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_total_amounts_table <- rbind(df_ccf_stacked_2020_total_amounts,df_ccf_stacked_2020_total_amounts_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_total_amounts_table[c(1,3,2,4,5,6),], format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE) %>% 
+  pack_rows("In Home*", 1, 2, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("Out of Home", 3, 5, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("", 6, 6, label_row_css = "background-color: #666; color: #fff;") %>% 
+  footnote(symbol = "In-home programming is also available, in some situations, to youth in out-of-home placements")
+```
+
+<br><br>
+
+### CCF Total Adjusted Reimbursement Amount by Section and Subsection, FY 2020 
+
+Note: Most subsection data, 70%, are missing across sections (most populated subsections appear to be for family foster care)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### recode NA as "Missing" for analysis of subsection as we want to report out everything including the NAs
+df_ccf_stacked_2020_only_cleaned_subsection_recode <- df_ccf_stacked_2020_only_cleaned %>% 
+  mutate(subsection = ifelse(is.na(subsection)==TRUE, "Missing", subsection))
+
+### basic grant, overall
+df_ccf_basic_grant_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Basic Grant") %>% 
+  group_by(section_clean) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### basic grant, by subsection
+df_ccf_basic_grant_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Basic Grant") %>% 
+  group_by(subsection) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_basic_grant_final <- rbind(df_ccf_basic_grant_overall,df_ccf_basic_grant_subsection)
+
+### in home, overall
+df_ccf_in_home_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="In Home") %>% 
+  group_by(section_clean) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### in home, by subsection
+df_ccf_in_home_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="In Home") %>% 
+  group_by(subsection) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_in_home_final <- rbind(df_ccf_in_home_overall,df_ccf_in_home_subsection)
+
+### family foster care, overall
+df_ccf_foster_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Family Foster Care") %>% 
+  group_by(section_clean) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### family foster care, by subsection
+df_ccf_foster_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Family Foster Care") %>% 
+  group_by(subsection) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_foster_final <- rbind(df_ccf_foster_overall,df_ccf_foster_subsection)
+
+### institutional care, overall
+df_ccf_institution_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Institutional Care") %>% 
+  group_by(section_clean) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### institutional care, by subsection
+df_ccf_institution_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Institutional Care") %>% 
+  group_by(subsection) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_institution_final <- rbind(df_ccf_institution_overall,df_ccf_institution_subsection)
+
+### independent living, overall
+df_ccf_independent_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Independent Living") %>% 
+  group_by(section_clean) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+### independent living, by subsection
+df_ccf_independent_subsection <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  filter(section_clean=="Independent Living") %>% 
+  group_by(subsection) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = subsection)
+
+### combine tables 
+df_ccf_independent_final <- rbind(df_ccf_independent_overall,df_ccf_independent_subsection)
+
+
+### overall 
+df_ccf_stacked_2020_total_amounts_overall <- df_ccf_stacked_2020_only_cleaned_subsection_recode %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  mutate("CCF Section" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_subsection_table <- rbind(df_ccf_basic_grant_final,df_ccf_in_home_final,df_ccf_foster_final,df_ccf_institution_final,df_ccf_independent_final,df_ccf_stacked_2020_total_amounts_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_subsection_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(15, bold = TRUE) %>% 
+  pack_rows("In Home*", 1, 4, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("Out of Home", 5, 14, label_row_css = "background-color: #666; color: #fff;") %>% 
+  pack_rows("", 15, 15, label_row_css = "background-color: #666; color: #fff;") %>% 
+  footnote(symbol = "In-home programming is also available, in some situations, to youth in out-of-home placements") %>% 
+  add_indent(c(2,4,6,7,8,9,11,12,14))
+```
+
+<br><br>
+
+### Raw 'Heading'/Programming Categories for 'In-Home' Programming 
+
+Note: 'In-Home' programming is the only CCF section for which there is near-complete data. However, as you can see, there is not consistency is coding/naming conventions.
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### in home, by heading
+df_ccf_in_home_heading <- df_ccf_stacked_2020_only_cleaned %>% 
+  filter(section_clean=="In Home") %>% 
+  group_by(heading) %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Heading/Programming" = heading)
+
+### in home, by heading
+df_ccf_in_home_overall <- df_ccf_stacked_2020_only_cleaned %>% 
+  filter(section_clean=="In Home") %>% 
+  summarize(total_adj_reimburse_amount = scales::dollar(sum(adjusted_reimbursed_amt)),
+            unique_children_placements = sum(total_children[ccf_month_code=="SEPTEMBER"]), ### the ccf fiscal year ends in september so we should use the september count
+            total_children_placements_month_not_unique = sum(monthly_children),
+            total_adj_reimburse_per_unique_youth_placement = scales::dollar(sum(adjusted_reimbursed_amt)/unique_children_placements),
+            total_adj_reimburse_per_total_youth_month_placements = scales::dollar(sum(adjusted_reimbursed_amt)/total_children_placements_month_not_unique)) %>% 
+  ungroup() %>% 
+  dplyr::mutate("CCF Heading/Programming" = "Overall")
+
+### combine tables 
+df_ccf_in_home_heading_table <- rbind(df_ccf_in_home_heading,df_ccf_in_home_overall)
+
+### print table via kableextra
+kable(df_ccf_in_home_heading_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(287, bold = TRUE)
+```
+
+<br><br>
+
+### CCF Out-of-Home Adjusted Reimbursement Amount by Month, FY 2020 (covid impact?) (only looking at monthly totals for out-of-home financial data -- Teddy said that some in-home programming doesn't charge on a monthly basis, but instead on an annual basis. in the data, this appears as just one lump sum in one month while the other 11 months show $0)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+df_ccf_stacked_2020_total_amounts_month <- df_ccf_stacked_2020_only_cleaned %>% 
+  filter(out_of_home_flag==1) %>% 
+  group_by(section_clean) %>% 
+  summarize(`October 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="OCTOBER"])),
+            `November 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="NOVEMBER"])),
+            `December 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="DECEMBER"])),
+            `January 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="JANUARY"])),
+            `February 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="FEBRUARY"])),
+            `March 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="MARCH"])),
+            `April 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="APRIL"])),
+            `May 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="MAY"])),
+            `June 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="JUNE"])),
+            `July 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="JULY"])),
+            `August 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="AUGUST"])),
+            `September 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="SEPTEMBER"]))) %>% 
+  ungroup() %>% 
+  dplyr::rename("CCF Section" = section_clean)
+
+df_ccf_stacked_2020_total_amounts_month_overall <- df_ccf_stacked_2020_only_cleaned %>% 
+  filter(out_of_home_flag==1) %>% 
+  summarize(`October 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="OCTOBER"])),
+            `November 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="NOVEMBER"])),
+            `December 2019` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="DECEMBER"])),
+            `January 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="JANUARY"])),
+            `February 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="FEBRUARY"])),
+            `March 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="MARCH"])),
+            `April 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="APRIL"])),
+            `May 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="MAY"])),
+            `June 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="JUNE"])),
+            `July 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="JULY"])),
+            `August 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="AUGUST"])),
+            `September 2020` = scales::dollar(sum(adjusted_reimbursed_amt[ccf_month_code=="SEPTEMBER"]))) %>% 
+  mutate("CCF Section" = "Overall")
+
+### combine tables for kable
+df_ccf_stacked_2020_total_amounts_month_table <- rbind(df_ccf_stacked_2020_total_amounts_month,df_ccf_stacked_2020_total_amounts_month_overall)
+
+### print table via kableextra
+kable(df_ccf_stacked_2020_total_amounts_month_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(4, bold = TRUE)
+```
+
+<br><br>
+
+## Maps 
+```{r include=FALSE}
+### pull census/acs data via tidycensus package
+
+### set census api key via tidycensus package
+### this allows us to pull census/acs data via the tidycensus package
+tidycensus::census_api_key("1ba246a0db6cfbd596219470af425fe932cf064b", install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+
+### read in county-level cdc/acs juvenile population estimates, split by race/ethnicity and sex, for base juvenile population rate calculations
+mi_age_10_17_sex_race_final <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt" , delim = "|")
+
+### pull other acs/census data for additional context/mapping, if wanted
+
+### overall population
+mi_overall_pop <- tidycensus::get_acs(geography = "County",
+                                              state = "MI",
+                                              variables = "B01003_001",
+                                              geometry = FALSE) %>%
+  clean_names() %>%
+  dplyr::select(geoid,name,estimate) %>%
+  dplyr::rename(estimate_total_pop = estimate)
+
+### weighted estimate of percentage of census tracts residents living below federal poverty threshold
+mi_poverty_status <- tidycensus::get_acs(geography = "County", 
+                                              state = "MI",
+                                              variables = "S1701_C03_001", 
+                                              geometry = FALSE) %>% 
+  clean_names() %>% 
+  dplyr::select(geoid,estimate) %>% 
+  dplyr::rename(estimate_below_poverty = estimate)
+
+### weighted estimate of income
+mi_median_income <- tidycensus::get_acs(geography = "County", 
+                                             state = "MI",
+                                             variables = "S1901_C01_012", 
+                                             geometry = FALSE) %>% 
+  clean_names() %>% 
+  dplyr::select(geoid,estimate) %>% 
+  dplyr::rename(estimate_income = estimate)
+
+
+### weighted estimate of percentage of race from 2010 census; couldn't find overall race estimates from 2018 ACS
+### pulled estimated counts and constructed percent estimate
+### these are the ids of race variables that we want to pull 
+race_vars <- c(estimate_white = "P005003",
+               estimate_black = "P005004",
+               estimate_asian = "P005006",
+               estimate_hispanic = "P004003")
+
+mi_race_2010 <- tidycensus::get_decennial(geography = "County", 
+                                               state = "MI",
+                                               variables = race_vars,
+                                               summary_var = "P001001",
+                                               geometry = FALSE) %>% 
+  clean_names() %>% 
+  mutate(estimate = (value/summary_value)*100) ###create percent estimate from estimated counts
+
+### pivot race file to be wide and unique by census tract 
+mi_race_2010 %<>%
+  dplyr::select(geoid,variable,estimate) %>% 
+  spread(variable,estimate, fill = NA) 
+```
+
+```{r include=FALSE}
+### join all acs variables together in one file 
+mi_acs_census_county <- left_join(mi_poverty_status, mi_median_income, by="geoid")
+
+mi_acs_census_county <- left_join(mi_acs_census_county, mi_overall_pop, by="geoid")
+
+mi_acs_census_county <- left_join(mi_acs_census_county, mi_race_2010, by="geoid")
+```
+
+```{r include=FALSE}
+### read in county-level iowa data to create county,state, geoid crosswalk with acs/census data 
+### this is the official iowa county shapefile, obtained here: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html 
+### this is not used for mapping, however, hence we remove geography below; it's just a crosswalk across county name, geoid, and county fip code
+mi_geo_county <- read_sf("C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\Geospatial_Mapping\\US County Geo Data\\tl_2019_us_county\\tl_2019_us_county.shp") %>%
+  clean_names() %>% 
+  filter(statefp=="26") %>% ### filter on michigan using state fips code (26)
+  dplyr::select(geoid, county_name_short=name, county_fip=countyfp) 
+
+### convert to dataframe and remove geometry -- this will not be 
+mi_geo_county <- as.data.frame(mi_geo_county) %>%
+    dplyr::select(-(geometry))
+
+```
+
+```{r include=FALSE}
+### CCF Total Adjusted Reimbursement Amount by section and county, FY 2020 
+df_ccf_stacked_2020_total_amounts_map <- df_ccf_stacked_2020_only_cleaned %>% 
+  group_by(agency_name) %>% 
+  summarize(total_adj_reimburse_per_total_youth_month_placements_basic_grant = scales::dollar(sum(adjusted_reimbursed_amt[section_clean=="Basic Grant"])/sum(monthly_children[section_clean=="Basic Grant"])),
+            total_adj_reimburse_per_total_youth_month_placements_in_home = scales::dollar(sum(adjusted_reimbursed_amt[section_clean=="In Home"])/sum(monthly_children[section_clean=="In Home"])),
+            total_adj_reimburse_per_total_youth_month_placements_family_foster_care = scales::dollar(sum(adjusted_reimbursed_amt[section_clean=="Family Foster Care"])/sum(monthly_children[section_clean=="Family Foster Care"])),
+            total_adj_reimburse_per_total_youth_month_placements_inst_care = scales::dollar(sum(adjusted_reimbursed_amt[section_clean=="Institutional Care"])/sum(monthly_children[section_clean=="Institutional Care"])),
+            total_adj_reimburse_per_total_youth_month_placements_ind_living = scales::dollar(sum(adjusted_reimbursed_amt[section_clean=="Independent Living"])/sum(monthly_children[section_clean=="Independent Living"]))) %>% 
+  ungroup() %>% 
+  dplyr::rename(county_name_short = agency_name)
+```
+
+```{r include=FALSE}
+### merge county code/geoid crosswalk to acs data
+mi_acs_census_county_crosswalk <- inner_join(mi_acs_census_county,mi_geo_county,by = "geoid")
+
+### county-level estimates
+
+### clean up acs/census estimates for eventual use as map labels
+mi_acs_census_county_crosswalk_full <- mi_acs_census_county_crosswalk %>% 
+    group_by(county_name_short) %>% 
+    summarize(estimate_total_pop = sum(estimate_total_pop, na.rm=TRUE),
+              estimate_below_poverty_mean = round(mean(estimate_below_poverty, na.rm=TRUE),digits = 1),
+              estimate_income_median = round(mean(estimate_income, na.rm=TRUE),digits = 1),
+              estimate_asian_mean = round(mean(estimate_asian, na.rm=TRUE),digits = 1),
+              estimate_black_mean = round(mean(estimate_black, na.rm=TRUE),digits = 1),
+              estimate_hispanic_mean = round(mean(estimate_hispanic, na.rm=TRUE),digits = 1),
+              estimate_white_mean = round(mean(estimate_white, na.rm=TRUE),digits = 1)) %>% 
+    ungroup() 
+
+### calculate rates using population estimates by county from 2019 American Community Survey
+mi_acs_census_county_no_geo_rates <- mi_acs_census_county_crosswalk_full %>% 
+  left_join(df_ccf_stacked_2020_total_amounts_map, by = "county_name_short") 
+```
+
+```{r include=FALSE}
+# options(java.parameters = "- Xmx1024m")
+
+### read in iowa county-level shape file    
+mi_county_shape <- read_sf("C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\Geospatial_Mapping\\US County Geo Data\\tl_2019_us_county\\tl_2019_us_county.shp") %>%
+  clean_names() %>% 
+  filter(statefp=="26") %>% 
+  dplyr::rename(county_name_short=name, 
+                county_fip=countyfp)
+
+
+### merge county shapefile to acs, census, and iowa data to attach geography and render the file map-able
+mi_acs_census_county_geo <- merge(mi_county_shape, mi_acs_census_county_no_geo_rates, by = "county_name_short") 
+```
+
+```{r include=FALSE}
+### define color palletes for each layer in all interactive maps
+
+### define pallete for pre_to_post_supervision_count_change at district level
+pal_percent_supervision_rate_change_district <- colorQuantile(palette = c("#00475d","#007392","#0db4e4","#9ed4ef"), domain = mi_acs_census_county_geo$pre_to_post_supervision_count_change, n = 4, reverse = TRUE) ### use reverse to invert colors 
+
+### define pallete for pre_to_post_covid_rate_change at district level
+pal_percent_revocation_rate_change_district <- colorQuantile(palette = c("#00475d","#007392","#0db4e4","#9ed4ef"), domain = mi_acs_census_county_geo$pre_to_post_covid_rate_change, n = 4, reverse = TRUE) ### use reverse to invert colors 
+
+### define pallete for pre_to_post_supervision_count_change at county level
+pal_percent_supervision_rate_change_county <- colorQuantile(palette = c("#00475d","#007392","#0db4e4","#9ed4ef"), domain = mi_acs_census_county_geo$pre_to_post_supervision_count_change, n = 3, reverse = TRUE) ### use reverse to invert colors 
+
+### define pallete for pre_to_post_covid_rate_change at county level
+pal_percent_revocation_rate_change_county <- colorQuantile(palette = c("#00475d","#007392","#0db4e4","#9ed4ef"), domain = mi_acs_census_county_geo$pre_to_post_covid_rate_change, n = 4, reverse = TRUE) ### use reverse to invert colors 
+```
+
+
+### Interactive Map 
+
+<br>
+
+#### % Change in Supervisions Started and Revocation Rate by Judicial District 
+
+This map plots change in active supervision cases and revocation rate (revocations per active supervision cases) per month from 2019 (March 2019 to February 2020) to 2020 (March 2020 to June 2021). Toggle between the two layers using the buttons in the top right corner. 
+
+You can also hover over each district to learn more--including the exact change in supervision caseload and revocation rate, the overall district population size, as well as the poverty rate, and overall race/ethnicity breakdown.
+
+<br>
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### create label that will pop-up when user hovers over each county; call this label for each polygon layer added because we want this to appear with each layer
+label_acs_census_county_popup <- paste0('<strong>',"District ", mi_acs_census_county_geo$judicial_district,'</strong>',"<br/>", "<br/>", 
+                                        '<strong>',"% Change in Supervision Cases and Revocation Rates (2019-2020)",'</strong>',"<br/>",
+                                         "District Supervision Cases: ", format(round(mi_acs_census_county_geo$pre_to_post_supervision_count_change, digits=0), big.mark=",", scientific=FALSE),"%","<br/>", "<br/>",
+                                         "District Revocation Rate: ", format(round(mi_acs_census_county_geo$pre_to_post_covid_rate_change, digits=0), big.mark=",", scientific=FALSE),"%","<br/>", "<br/>",
+                    '<strong>',"Population, SES, and Race/Ethnicity Data (from 2019 ACS)",'</strong>',"<br/>",
+                                        "Overall Population: ",format(round(mi_acs_census_county_geo$estimate_total_pop, digits=0), big.mark=",", scientific=FALSE),"<br/>",
+                                        "Poverty Rate: ",mi_acs_census_county_geo$estimate_below_poverty_mean,"%","<br/>",
+                                        "Asian Population: ",mi_acs_census_county_geo$estimate_asian_mean,"%","<br/>",
+                                        "Black Population: ",mi_acs_census_county_geo$estimate_black_mean,"%","<br/>",
+                                        "Hispanic Population: ",mi_acs_census_county_geo$estimate_hispanic_mean,"%","<br/>",
+                                        "White Population: ",mi_acs_census_county_geo$estimate_white_mean,"%") %>%
+  lapply(htmltools::HTML)
+
+### create legend labels for all mapped layers
+label_supervision_rate <- c("-53.1% to -24.8%","-24.8% to 9.9%","9.9% to 17.4%","17.4%+","NA")
+
+label_revocation_rate <- c("-56.5% to -49.3%","-49.3% to -44.6%","-44.6% to -28.9%","-28.9%+","NA")
+
+### map with leaflet 
+mi_acs_census_county_geo %>%
+    sf::st_transform(crs = "+init=epsg:4326") %>%
+    leaflet(height = 600, width = 900) %>%
+  addProviderTiles(provider = "CartoDB.Positron",
+                   options = providerTileOptions(minZoom = 7, maxZoom = 9)) %>%
+  addPolylines(color = "Black",
+               stroke = FALSE,
+               opacity = .01,
+               weight = .01) %>%
+  addPolygons(weight = 1,
+              color = "Black",
+              fillColor = ~ pal_percent_supervision_rate_change_district(mi_acs_census_county_geo$pre_to_post_supervision_count_change),
+                fillOpacity = 0.7,
+                label = ~ label_acs_census_county_popup,
+                labelOptions = labelOptions(direction = "auto"),
+               highlightOptions  = highlightOptions(
+                opacity = 1, 
+                weight = 2, 
+                fillOpacity = 1,
+                bringToFront = TRUE, 
+                sendToBack = FALSE),
+              group = "% Change in Active District Supervision Cases") %>%
+    addPolygons(weight = 1,
+              color = "Black",
+              fillColor = ~ pal_percent_revocation_rate_change_district(mi_acs_census_county_geo$pre_to_post_covid_rate_change),
+                fillOpacity = 0.7,
+                label = ~ label_acs_census_county_popup,
+                labelOptions = labelOptions(direction = "auto"),
+               highlightOptions  = highlightOptions(
+                opacity = 1,
+                weight = 2,
+                fillOpacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE),
+              group = "% Change in District Revocation Rate") %>%
+    addPolylines(data = mi_acs_census_county_geo,
+                 color = "Black",
+               opacity = .5,
+               weight = .5) %>%
+    addLegend("topleft",
+              pal = pal_percent_supervision_rate_change_district,
+              values = ~ mi_acs_census_county_geo$pre_to_post_supervision_count_change,
+              group = "% Change in Active District Supervision Cases",
+              title = "% Change in Active District Supervision Cases",
+              opacity = 2,
+              labFormat = function(type, cuts, p) {paste0(label_supervision_rate)}) %>% 
+  addLegend("topleft",
+          pal = pal_percent_revocation_rate_change_district,
+          values = ~ mi_acs_census_county_geo$pre_to_post_covid_rate_change,
+          group = "% Change in District Revocation Rate",
+          title = "% Change in District Revocation Rate",
+          opacity = 2,
+          labFormat = function(type, cuts, p) {paste0(label_revocation_rate)}) %>%
+addLayersControl(
+  baseGroups = c("% Change in Active District Supervision Cases","% Change in District Revocation Rate"),
+  position = "topright",
+  options = layersControlOptions(collapsed = FALSE)) %>%
+  htmlwidgets::onRender("
+    function(el, x) {
+      var updateLegend = function () {
+          var selectedGroup = document.querySelectorAll('input:checked')[0].nextSibling.innerText.substr(1);
+
+          document.querySelectorAll('.legend').forEach(a => a.hidden=true);
+          document.querySelectorAll('.legend').forEach(l => {
+            if (l.children[0].children[0].innerText == selectedGroup) l.hidden=false;
+          });
+      };
+      updateLegend();
+      this.on('baselayerchange', e => updateLegend());
+    }") ### the javascript specified after htmlwidgets attaches each legend to the selected layer; this is quite temperamental. Doesn't work with multiple interactive maps and doesn't work with tabs if isn't in first tab
+```
+
+<br><br>
+
+### Static Map
+
+<br>
+
+```{r include=FALSE}
+### set constants for static plots (this may need to change in final rmd)
+default_font_color <- "#4e4d47"
+default_font_family <- "Arial"
+
+### define options for saving plots
+knitr::opts_chunk$set(
+    out.width = "115%",
+    dpi = 500,
+    fig.width = 10,
+    fig.height = 7.5,
+    strip.white = T,
+    dev = "png")
+```
+
+```{r include=FALSE}
+### create static map theme (based on https://timogrossenbacher.ch/2019/04/bivariate-maps-with-ggplot2-and-sf/)
+theme_map <- function(...) {
+  theme_minimal() +
+  theme(
+    text = element_text(family = default_font_family,
+                        color = default_font_color),
+    # remove all axes
+    axis.line = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    # add a subtle grid
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # borders and margins
+    plot.margin = unit(c(.5, .5, .2, .5), "cm"),
+    panel.border = element_blank(),
+    panel.spacing = unit(c(-.1, 0.2, .2, 0.2), "cm"),
+    # titles
+    legend.title = element_text(size = 11),
+    legend.text = element_text(size = 9, hjust = 0,
+                               color = default_font_color),
+    plot.title = element_text(size = 15, hjust = 0.5,
+                              color = default_font_color),
+    plot.subtitle = element_text(size = 10, hjust = 0.5,
+                                 color = default_font_color,
+                                 margin = margin(b = -0.1,
+                                                 t = -0.1,
+                                                 l = 2,
+                                                 unit = "cm"),
+                                 debug = F),
+    # captions
+    plot.caption = element_text(size = 7,
+                                hjust = .5,
+                                margin = margin(t = 0.2,
+                                                b = 0,
+                                                unit = "cm"),
+                                color = "#939184"),
+    ...
+  )
+}
+```
+
+
+#### % Change in Revocation Rate by Judicial District, 2019-2020
+
+This map plots change in revocation rate (revocations per active supervision cases) per month from 2019 (March 2019 to February 2020) to 2020 (March 2020 to June 2021)
+
+```{r echo=FALSE, warning=FALSE}
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- mi_acs_census_county_geo %>%
+  pull(pre_to_post_covid_rate_change) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels for map's legend
+label_revocation_rate <- c("-28.9%+","-44.6% to -28.9%","-49.3% to -44.6%","-56.5% to -49.3%")
+
+### create a new variable with the specified quantiles
+mi_acs_census_county_geo %<>%
+  mutate(pre_to_post_covid_rate_change_quartile = cut(-pre_to_post_covid_rate_change,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_revocation_rate,
+                               include.lowest = T)) 
+
+### map via ggplot 
+ggplot(
+  # define main data source
+  data = mi_acs_census_county_geo
+) +
+  # use the "alpha hack" (as the "fill" aesthetic is already taken)
+  scale_alpha(name = "",
+              range = c(0.6, 0),
+              guide = F) + # suppress legend
+  # add main fill aesthetic
+  # use thin white stroke for municipality borders
+  geom_sf(
+    mapping = aes(
+      fill = pre_to_post_covid_rate_change_quartile
+      ),
+    color = "white",
+    size = 0.1
+  ) +
+ scale_fill_manual(
+    values = c("#00475d","#007392","#0db4e4","#9ed4ef"),
+    name = "% Change in Rate",
+    na.value = "grey50",
+    guide = guide_legend(
+     keyheight = unit(5, units = "mm"),
+     title.position = "top",
+     reverse = F # display highest on top
+  )) +
+  # use thicker white stroke for borders
+  geom_sf(
+    data = iowa_acs_census_district_geo,
+    fill = "transparent",
+    color = "white",
+    size = 1.25
+  )  +
+  geom_sf(
+    data = iowa_county_shape,
+    fill = "transparent",
+    color = "white",
+    size = 0.3
+  )  +
+  # add titles
+  labs(x = NULL,
+       y = NULL,
+       title = "% Change in Revocation Rate",
+         subtitle = "2019 to 2020") +
+  # add theme
+  theme_map()
+```
+
+<br><br>
+
+## Questions/Notes
+
+* Duplicate entries interpretation? For example:
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### stack all ccf files -- columns all align
+df_ccf_stacked_2016_2020_dup_example <- rbind(ccf_fy2016,ccf_fy2017,ccf_fy2018,ccf_fy2019,ccf_fy2020) %>% 
+  get_dupes() %>% 
+  filter(agency_name=="Alcona County",
+         ccf_month_code== "MARCH",
+         ccf_fy=="2016") %>% 
+  arrange(section,subsection,heading)
+  
+### print table via kableextra
+kable(df_ccf_stacked_2016_2020_dup_example, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") 
+```
+
+* Follow-up on % of in-home programming that could be funded outside of CCF. Either way, need to keep in mind that in-home costs may not represent actual programming costs but instead the amount contributed by the CCF (according to Teddy, other funding may include: scao, community mental health/cmh, and other grants)
+
+* Follow-up on usability of 2019 data for separated jj and a/n placement data -- given difficulty of generalizing from 2020
+
+* Re-code "Court Operated Facility" and "County/Court Operated Facilities" as institutional care? Only a few counties appear to code these in 'section'? Same for "In-Home Care" and "In Home"?
+
+* Removed all headings with 'total' -- these appear to simply tally up youth counts and reimbursement totals for the month by section? Confirm with Teddy. 
+
+* Confirm fiscal year interpretation (CCF FY 2020: October 2019 to September 2020?)
+
+* Two state jj facilities (Bay Pines and Shawono Center) not included in out-of-home placements -- Kelly confirmed Teddy's take on this, but subsection category for out-of-county placement is called "A. Another County's Institution (Court or MDHHS)"?
+
+* Days care provided: is this reliable? i see numbers larger than the days in a given month
+
+* Most subsection data, 70%, are missing across sections (most populated subsections appear to be for family foster care)
+
+* Reminder of exception to 50% reimbursement rule? 
+
+<br>
