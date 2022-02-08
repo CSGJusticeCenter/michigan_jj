@@ -104,6 +104,23 @@ incidents %<>%
 ### join incidents to child_details to obtain race/ethnicity and gender -- may eventually need to join to placement data in order to calculate incidents per placements by facility and facility type, though
 child_details_incidents <- inner_join(child_details, incidents, by = c("PERSON_ID"))
 
+
+# For now, I've coded the following legal statuses as dual ward, based on Mike's feedback: 
+# 52 - MCI Ward/44 and Act 150/46 -- mdhhs (abuse/neglect whose rights have been terminated and delinquent public ward under act 150 w/ mdhhs)
+# 90 - Temp Court Ward 42 and Delinquent Court Ward 40 -- uncertain (a/n temp court and delinquent court ward; use other field for court, mdhhs, can change over time)
+# 91 -  Perm Court Ward 41 and Delinquent Court Ward 40 -- uncertain ()
+# 92 - Temp Court Ward 42 and Act 150/46 -- mdhhs
+# 93 - Perm Court Ward 41 and Act 150/46 -- mdhhs
+# 94 - MCI Ward/44 and Delinquent Court Ward/40 -- uncertain
+# 80 - In Home 42 and Delinquent Court Ward 40 -- uncertain
+# 82 - In Home 42 and Act 150/46 -- mdhhs
+# 
+# And the following as state wards based on Soleil's feedback (according to Soleil, "Both the 40 and the 50 are MDHHS supervised youth, not county court supervised. The 50 is the legal status fort given when an intake is done in MiSACWIS until another status is added based on a court order or the youth may be a pre sentence investigation"):
+# 40 - Court Ward Delinquent -- mdhhs
+# 44 - State Ward ' MCI - Act 220/296
+# 46 - State Ward - Delinquent - Act 150 -- mdhhs
+# 50 - Non-Ward With a Delinquent Petition Filed -- either intake, juvenile competency, or pretrial investigations AND likely mdhhs supervised
+
 ### create three lists for dual, state, and county wards with the corresponding legal_status codes 
 dual_ward_status_list <- c("52 - MCI Ward/44 and Act 150/46","90 - Temp Court Ward 42 and Delinquent Court Ward 40","91 -  Perm Court Ward 41 and Delinquent Court Ward 40","92 - Temp Court Ward 42 and Act 150/46","93 - Perm Court Ward 41 and Act 150/46","94 - MCI Ward/44 and Delinquent Court Ward/40","80 - In Home 42 and Delinquent Court Ward 40","82 - In Home 42 and Act 150/46")
 
@@ -113,7 +130,7 @@ county_ward_status_list <- c()
 
 ###### de-dup legal_status using all columns
 ###### for legal statuses with same start date (n = 120ish), I keep the legal status with the longer window of time between start and end date (using censured end date which is: The end date of the child's legal status and, if none, the end of the period under study.)
-### code legal_status into three groups: dual ward, state ward, and county ward
+### code legal_status into three groups: dual ward, state ward, and county ward (no county wards present)
 legal_details <- new_legal_details %>%
   distinct(.,.keep_all = TRUE) %>% ### file already unique; no pure duplicates and no records dropped
   mutate(LEGAL_STATUS_BEGIN = ymd(LEGAL_STATUS_BEGIN),
@@ -451,19 +468,9 @@ jj_assessments_placement_legal_status_clean_risk_missing_explore <- jj_assessmen
 #   distinct(person_id,placement_episode_segment,.keep_all=TRUE) 
   
   
-table(jj_assessments_placement_legal_status_clean_risk_missing_explore$living_arrangement, jj_assessments_placement_legal_status_clean_risk_missing_explore$disposition_risk_level_earliest_use
-      , useNA = 'always')
+# table(jj_assessments_placement_legal_status_clean_risk_missing_explore$living_arrangement, jj_assessments_placement_legal_status_clean_risk_missing_explore$disposition_risk_level_earliest_use
+#       , useNA = 'always')
 
-### spot check: 188718,342650,427655,653801,969790,1046244,1058126,1148376,1164926 == only residential and re-entry, no disposition; 195871 == much earlier risk assessment
-```
-
-```{r include=FALSE}
-### missing disposition risk assessment data examples for soleil
-child_details_missing_risk_assess_data <- child_details %>% 
-  filter(PERSON_ID %in% c(188718,342650,427655,653801,969790,1046244,1058126,1148376,1164926)) %>% 
-  select(PERSON_ID,BIRTH_DT)
-
-openxlsx::write.xlsx(child_details_missing_risk_assess_data,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Data Missingness to MDHHS\\child_details_missing_risk_assess_data_2_1_22.xlsx")
 ```
 
 
@@ -477,6 +484,9 @@ readr::write_delim(jj_assessments_placement_legal_status_clean,"C:\\Users\\abyru
 readr::write_delim(child_details_incidents_clean,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\child_details_incidents_clean.txt", delim = "|")
 ```
 
+#################################################################################
+CLEANING ENDS HERE; BELOW ARE BASIC SAMPLE DESCRIPTIVES TO GET SENSE OF DATA
+#################################################################################
 
 ## Placement Data Diagram
 

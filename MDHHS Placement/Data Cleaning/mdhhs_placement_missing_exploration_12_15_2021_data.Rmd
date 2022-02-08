@@ -15,7 +15,7 @@ libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer"
 ```
 
 ```{r include=FALSE}
-### pull in iowa data from raw excel files; each tab in each excel file will be a separate dataframe
+### pull in data from raw excel files; each tab in each excel file will be a separate dataframe
 read_excel_allsheets <- function(filename) { 
   sheets <- readxl::excel_sheets(filename) 
   x <- lapply(sheets, function(X) readxl::read_excel(filename, sheet = X)) 

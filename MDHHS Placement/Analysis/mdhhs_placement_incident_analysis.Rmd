@@ -56,6 +56,17 @@ child_details_incidents_clean <- readr::read_delim("C:\\Users\\abyrum\\The Counc
 
 
 ```{r include=FALSE}
+### group living arrangements into buckets based on feedback from Josh
+
+# Here are our final coding decisions with the MDHHS placement data based on our meeting last week around what we are counting as a “placement” within each “placement episode”. 
+
+# The following living arrangements are placement types which – in the analysis – do not count as unique individual placements, won’t count towards placements per episode metrics, and won’t count towards length of stay calculation (though I will (1) separate out placements episodes with only the following placements to highlight their frequency, (2) use in-home placements following out-of-home placements for post-out-of-home supervision analysis, (3) separate out detention and jail in analyses): 
+
+#####	“Detention", "Jail", "Adoptive Home", "Parental Home", "Friend/Partner Home", "Licensed/Unlicensed Relative Home", "Unrelated Caregiver", "College Dormitory", "Boarding School, etc. (other)", "Terminated parental home", "Out of State Parental Home", "Out of State Licensed Relative", "Out of State Unlicensed Relative", "AWOL", "Escape", "Independent Living", "Rental Home/Apartment", "Pre-Adoptive Home", "NO MATCH FOUND"
+# The following living arrangements are placement types which can constitute a placement episode, count as unique individual placements, count towards placements per episode, and count towards length of stay:
+
+#####	"Adult Foster Home", "Agency" (indicates that "a youth is in an office overnight (at midnight)"), "Child Caring Institution", "Court Treatment Facility", "Emergency Residential Shelter", "Emergency Shelter Home", "EPIC Guardianship Home", "Hospital", "Mental Health Facility", "Juvenile Guardianship Home", "Licensed Unrelated Foster Home", "Out of State Child Caring Institution", "Out of State Foster Home", "Private Agency Foster Care", "Runaway Service Facility", "MDHHS Training School", "Community Justice Center" (closed prior to study window so won’t actually appear in final analysis)
+
 jj_assessments_placement_legal_status_clean %<>%
   mutate(living_arrangement_grouped_out_of_home_only = case_when(
     living_arrangement %in% c("Emergency Residential Shelter", "Hospital", "Court Treatment Facility", "Runaway Service Facility", "Emergency Residential Home") ~ 4,
