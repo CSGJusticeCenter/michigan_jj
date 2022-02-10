@@ -8,7 +8,7 @@ output: html_document
 ```{r include=FALSE}
 ### call libraries
 library(easypackages)
-libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr")
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
 ````
 
 # {.tabset .tabset-fade .tabset-pills}
@@ -381,6 +381,133 @@ tcs_charge_type_table <- rbind(tcs_charge_type,tcs_charge_type_overall)
 kable(tcs_charge_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
   row_spec(6, bold = TRUE)
+```
+
+<br><br>
+
+## Codebooks
+
+<br>
+
+#### Cases
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### disable scientific notation
+options(scipen=999)
+
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+cases_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Cases", range = "B2:C110") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+cases_descriptives <- tcs_cases_de_dup %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+cases_codebook <- left_join(cases_descriptives,cases_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(cases_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+#### Charges
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+charges_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Charges", range = "B2:C106") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+charges_descriptives <- tcs_charges_de_dup %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+charges_codebook <- left_join(charges_descriptives,charges_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(charges_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+#### Dispositions
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+dispositions_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Dispositions", range = "B2:C47") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+dispositions_descriptives <- tcs_dispositions_de_dup %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+dispositions_codebook <- left_join(dispositions_descriptives,dispositions_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(dispositions_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+#### Placements
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+placements_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Placements", range = "B2:C52") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+placements_descriptives <- tcs_placements_de_dup %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+placements_codebook <- left_join(placements_descriptives,placements_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(placements_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
 ```
 
 <br><br>
