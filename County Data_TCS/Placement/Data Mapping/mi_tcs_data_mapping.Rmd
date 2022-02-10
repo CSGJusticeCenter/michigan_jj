@@ -1,0 +1,94 @@
+---
+title: "county_data_tcs_mapping"
+author: "Andrew Byrum"
+date: "2/8/2022"
+output: html_document
+---
+
+### This syntax pulls in all Michigan TCS County JJ placement data -- stored as an Excel Worksheet -- and preliminarily maps their relationships with the datamodelr package (https://github.com/bergant/datamodelr)
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","usethis")
+````
+
+## 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
+```{r include=FALSE}
+# library(remotes)
+# 
+# remotes::install_github("csgjusticecenter/csgjcr")
+
+# set csg path -- until i am able to download csgjcr packages
+csg_path <- "C:/Users/abyrum/The Council of State Governments/JC Research - Documents/JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS"
+
+# cases
+tcs_cases <- read_xlsx(
+  file.path(
+    csg_path, "TCS_Cases_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date)) %>% 
+  select(juvenile_nbr,case_number,offense_dt)
+
+# charges
+tcs_charges <- read_xlsx(
+  file.path(
+    csg_path, "TCS_Charges_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date)) %>% 
+  select(id,case_id)
+
+# dispositions
+tcs_dispositions <- read_xlsx(
+  file.path(
+    csg_path, "TCS_DispositionsPerCharge_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date)) %>% 
+  select(name_nbr,case_id,charge_count,id)
+
+# # sentencing -- this is "Sentencing results on adult criminal FJ and DJ sentencings."
+# tcs_sentencing <- read_xlsx(
+#   file.path(
+#     csg_path, "TCS_Sentencings_A.xlsx"),
+#   .name_repair = make_clean_names
+#   ) %>%
+#   mutate(across(where(is.POSIXct), as.Date))
+
+# placements
+tcs_placements <- read_xlsx(
+  file.path(
+    csg_path, "TCS_Placements_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date)) %>% 
+  select(name_nbr,case_id,place_begin_date,everything())
+
+```
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+### create data map using datamodelr package; first, we have to name each table in the list we're creating, second we establish which columns are primary keys for each table via dm_set_key, and lastly we indicate how tables should be joined together -- which produces arrows between two tables via dm_add_references (this data map will need to be confirmed with our Michigan data contacts)
+michigan_placements_data_map <- list(tcs_cases = tcs_cases, tcs_charges = tcs_charges, tcs_dispositions = tcs_dispositions, tcs_placements = tcs_placements) %>% ### list dataframes to map
+    dm_from_data_frames() %>%
+    dm_set_key("tcs_cases", c("juvenile_nbr","case_number","offense_dt")) %>% ### set primary keys in each dataframe 
+    dm_set_key("tcs_charges", c("id","case_id")) %>% 
+    dm_set_key("tcs_dispositions", c("name_nbr","case_id","charge_count","id")) %>%
+    dm_set_key("tcs_placements", c("name_nbr","case_id","place_begin_date")) %>%
+    dm_add_references(tcs_dispositions$name_nbr == tcs_cases$juvenile_nbr, 
+        tcs_charges$case_id == tcs_cases$case_number,
+        tcs_placements$name_nbr == tcs_cases$juvenile_nbr,
+        tcs_placements$case_id == tcs_cases$case_number,
+        tcs_dispositions$case_id == tcs_cases$case_number,
+        tcs_dispositions$name_nbr == tcs_cases$juvenile_nbr,
+        tcs_dispositions$case_id == tcs_charges$case_id,
+        tcs_dispositions$id == tcs_charges$id) %>% 
+    dm_create_graph(rankdir = "BT", columnArrows = FALSE, col_attr = c("column")) ### draw arrow to establish linkage relationship
+
+michigan_placements_data_map
+
+### export data map as png file -- had to play around with height and width to render an image that kept legibility as user zooms in (since there are 40+ tables here)
+dm_export_graph(michigan_placements_data_map, file_name = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping.png")
+
+```

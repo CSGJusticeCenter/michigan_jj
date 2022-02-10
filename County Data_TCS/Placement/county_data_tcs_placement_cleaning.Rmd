@@ -8,43 +8,41 @@ output: html_document
 ```{r include=FALSE}
 ### call libraries
 library(easypackages)
-libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog")
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr")
 ````
 
-1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
+# {.tabset .tabset-fade .tabset-pills}
 ```{r include=FALSE}
-# library(remotes)
-# 
-# remotes::install_github("CSGJCResearch/csgjcr")
+## 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
 
-# set csg path -- until i am able to download csgjcr packages
-csg_path <- "C:/Users/abyrum/The Council of State Governments/JC Research - Documents/JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS"
+# set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
 
-# cases
+# import cases
 tcs_cases <- read_xlsx(
   file.path(
-    csg_path, "TCS_Cases_A.xlsx"),
+    sharepoint_tcs_data_path, "TCS_Cases_A.xlsx"),
   .name_repair = make_clean_names
   ) %>%
   mutate(across(where(is.POSIXct), as.Date))
 
-# charges
+# import charges
 tcs_charges <- read_xlsx(
   file.path(
-    csg_path, "TCS_Charges_A.xlsx"),
+    sharepoint_tcs_data_path, "TCS_Charges_A.xlsx"),
   .name_repair = make_clean_names
   ) %>%
   mutate(across(where(is.POSIXct), as.Date))
 
-# dispositions
+# import dispositions
 tcs_dispositions <- read_xlsx(
   file.path(
-    csg_path, "TCS_DispositionsPerCharge_A.xlsx"),
+    sharepoint_tcs_data_path, "TCS_DispositionsPerCharge_A.xlsx"),
   .name_repair = make_clean_names
   ) %>%
   mutate(across(where(is.POSIXct), as.Date))
 
-# # sentencing -- this is "Sentencing results on adult criminal FJ and DJ sentencings."
+# # import sentencing -- this is "Sentencing results on adult criminal FJ and DJ sentencings."
 # tcs_sentencing <- read_xlsx(
 #   file.path(
 #     csg_path, "TCS_Sentencings_A.xlsx"),
@@ -52,40 +50,34 @@ tcs_dispositions <- read_xlsx(
 #   ) %>%
 #   mutate(across(where(is.POSIXct), as.Date))
 
-# placements
+# import placements
 tcs_placements <- read_xlsx(
   file.path(
-    csg_path, "TCS_Placements_A.xlsx"),
+    sharepoint_tcs_data_path, "TCS_Placements_A.xlsx"),
   .name_repair = make_clean_names
   ) %>%
   mutate(across(where(is.POSIXct), as.Date))
 
 ```
 
-# 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
-
-* `juvenile_nbr` (unique individual ID) and `case_number` (unique case ID, though not sure of "case" definition) appear to be main primary key across files, but will need to use dates at the very least to create pre- and post- disposition/adjudication distinctions in placement data *
-
-* maybe also use `jurist_nbr` ("The professional number associated to the Judge assigned to the case."), either `case_year` or `year`, `tc_sreport_court_jcl` ("AS400 caseload report court code."),
-
-* what's the difference between `case_year` ("Year the case was filed.") and `year` ("Year of the caseload being run/reported.")? and why does the data dictionary indicate that `year` "Must be included in some form to link tables" but not `case_year`?
-
-* two unique juvenile_nbr's can have one case_number? 
-
-* what is `ordertype` in the placements data? many records with value of `ORD` as opposed to `PCN` are missing start dates and/or end dates...
-
-
-**seemingly important dates:**
-
-* offense_dt
-* case_file_dt
-* adjudication_dt
-* arraignment_dt
-* disposition
-* case_reopen_dt
-* case_closed_dt
-
 ```{r include=FALSE}
+## 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
+
+# * `juvenile_nbr` (unique individual ID) and `case_number` (unique case ID, though not sure of "case" definition) appear to be main primary key across files, but will need to use dates at the very least to create pre- and post- disposition/adjudication distinctions in placement data *
+# 
+# * maybe also use `jurist_nbr` ("The professional number associated to the Judge assigned to the case."), either `case_year` or `year`, `tc_sreport_court_jcl` ("AS400 caseload report court code."),
+# 
+# **seemingly important dates:**
+# 
+# * offense_dt
+# * case_file_dt
+# * adjudication_dt
+# * arraignment_dt
+# * disposition
+# * case_reopen_dt
+# * case_closed_dt
+
+
 # de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
 tcs_cases_de_dup <- tcs_cases %>%
   filter(!is.na(juvenile_nbr)==TRUE,
@@ -110,7 +102,8 @@ tcs_dispositions_de_dup <- tcs_dispositions %>%
          !is.na(name_nbr)==TRUE) %>% 
   dplyr::rename(case_number = case_id,
                 juvenile_nbr= name_nbr) %>% 
-  distinct(juvenile_nbr,case_number,charge_count,charge_count,dispo_dt,event_nbr,.keep_all = TRUE)
+  distinct(juvenile_nbr,case_number,charge_count,charge_count,id,dispo_dt,event_nbr,.keep_all = TRUE) %>% 
+  mutate(id = as.character(id))
   
 
 # de-dup placements file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped 
@@ -121,10 +114,334 @@ tcs_placements_de_dup <- tcs_placements %>%
          !is.na(name_nbr)==TRUE) %>% 
   dplyr::rename(case_number = case_id,
                 juvenile_nbr= name_nbr) %>% 
-  distinct(name_nbr,case_number,.keep_all = TRUE)
+  distinct(juvenile_nbr,case_number,place_begin_date,.keep_all = TRUE) %>% 
+  mutate(unique_placement_id = paste0(juvenile_nbr,case_number,place_begin_date))
 ```
 
-```{r}
-tcs_cases_de_dup_charges <- left_join(tcs_cases_de_dup,tcs_charges_de_dup,by="case_number")
+## Analysis Outline
+
+**Placement Counts**
+
+**Placement count and placements per 'case' over time**
+
+* By pre-/post-adjudication
+
+* By placement type
+
+* By charge category
+
+* By placement history
+
+*	By race/ethnicity (RRI using MI population juvenile race/ethnicity data for pertinent counties)
+
+* By age
+
+* By gender
+
+**Length of Stay**
+
+**Mean and median length of stay over time** 
+
+* By pre-/post-adjudication
+
+* By placement type
+
+* By charge category
+
+* By placement history
+
+*	By race/ethnicity (with t-tests for statistical significance of differences in means)
+
+* By age
+
+* By gender
+
+**Other**
+
+* There appears to be both "special cost" and "per diem" fields in the placement file
+
+<br><br>
+
+## Basic Sample Descriptives, Placement and Charge Data
+
+<br>
+
+#### Placement N's: Unique Placement Records by Year of Case, cases filed 2016-2020  (TCS pull was for "Case Filing Years Included - 2016-2020")
+
+Note: Placements in this table are individual placements, not grouped by individual or case
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create overall placement count denominator for % in cross-tabs
+unique_placement_id_n <- n_distinct(tcs_placements_de_dup$unique_placement_id)
+
+### all -- grouped by year
+tcs_placements_year <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(case_year)==TRUE, 
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  group_by(case_year) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::rename(`Year of Case` = case_year) %>% 
+  mutate(`Year of Case` = as.character(`Year of Case`))
+
+### all -- overall
+tcs_placements_year_overall <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(case_year)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::mutate(`Year of Case` = "Overall") 
+
+### combine tables for kable
+tcs_placements_year_table <- rbind(tcs_placements_year,tcs_placements_year_overall)
+
+### print table via kableextra
+kable(tcs_placements_year_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE)
 ```
 
+<br><br>
+
+#### Placement N's: Unique Placements by Placement/Facility Type, cases filed 2016-2020 
+
+Note: Placements in this table are individual placements, not grouped by individual or case
+
+Question: Do we want similar categories as with the MDHHS analysis: in home, detention, jail, residential, other out of home (including treatment)? Pending any additional code book from Laura/TCS folks, I'll need help categorizing these
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create overall placement count denominator for % in cross-tabs
+unique_placement_id_n <- n_distinct(tcs_placements_de_dup$unique_placement_id[!is.na(tcs_placements_de_dup$place_type_desc)==TRUE])
+
+### all -- grouped by placement type
+tcs_placements_place_type <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(place_type_desc)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  group_by(place_type_desc) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::rename(`Placement Type` = place_type_desc) %>% 
+  mutate(`Placement Type` = as.character(`Placement Type`))
+
+### all -- overall
+tcs_placements_place_type_overall <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(place_type_desc)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::mutate(`Placement Type` = "Overall") 
+
+### combine tables for kable
+tcs_placements_place_type_table <- rbind(tcs_placements_place_type,tcs_placements_place_type_overall)
+
+### print table via kableextra
+kable(tcs_placements_place_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(95, bold = TRUE)
+```
+
+<br><br>
+
+#### Placement N's: Unique Placements by County (County Court), cases filed 2016-2020 
+
+Note: Placements in this table are individual placements, not grouped by individual or case
+
+Question: Do all Michigan counties have their own court? We don't appear to have county of residence for youth so if multiple counties share one court, they would be grouped together here. We have one extra county -- GOGEBIC -- in the case data but not in the placement data
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### clean county name
+tcs_placements_de_dup %<>%
+  mutate(county_court_name = str_to_title(tc_sreport_courtname))
+         
+### create overall placement count denominator for % in cross-tabs
+unique_placement_id_n <- n_distinct(tcs_placements_de_dup$unique_placement_id[!is.na(tcs_placements_de_dup$county_court_name)==TRUE])
+
+### all -- grouped by placement type
+tcs_placements_place_type <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(county_court_name)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  group_by(county_court_name) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::rename(`County Court` = county_court_name) %>% 
+  mutate(`County Court` = as.character(`County Court`))
+
+### all -- overall
+tcs_placements_place_type_overall <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(county_court_name)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::mutate(`County Court` = "Overall") 
+
+### combine tables for kable
+tcs_placements_place_type_table <- rbind(tcs_placements_place_type,tcs_placements_place_type_overall)
+
+### print table via kableextra
+kable(tcs_placements_place_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(10, bold = TRUE)
+```
+
+<br><br>
+
+#### Placement N's: Unique Placements by Missing Start and/or End Date
+
+Note: Placements in this table are individual placements, not grouped by individual or case
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create overall placement count denominator for % in cross-tabs
+unique_placement_id_n <- n_distinct(tcs_placements_de_dup$unique_placement_id)
+
+### create flag for missing start or end date
+tcs_placements_de_dup %<>%
+  mutate(missing_start_end_date = ifelse((is.na(place_begin_date)== TRUE | is.na(place_end_date)==TRUE),"Missing at least one date","Not missing any dates"))
+
+### all -- grouped by placement type
+tcs_placements_place_type <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(missing_start_end_date)==TRUE) %>% 
+  group_by(missing_start_end_date) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::rename(`Missing Date` = missing_start_end_date) %>% 
+  mutate(`Missing Date` = as.character(`Missing Date`))
+
+### all -- overall
+tcs_placements_place_type_overall <- tcs_placements_de_dup %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  filter(!is.na(place_type_desc)==TRUE) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
+            `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  dplyr::mutate(`Missing Date` = "Overall") 
+
+### combine tables for kable
+tcs_placements_place_type_table <- rbind(tcs_placements_place_type,tcs_placements_place_type_overall)
+
+### print table via kableextra
+kable(tcs_placements_place_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(3, bold = TRUE)
+```
+
+<br><br>
+
+#### Charge N's: Unique Placements by Placement/Facility Type, cases filed 2016-2020 
+
+Note: Charges in this table are individual charges, not grouped by individual or case. These are not yet linked to placements -- this is simply the universe of charges in the TCS data. 
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# From TCS code book: Current Offense Classification - C/Civil Infraction, F/Felony, M/Misdemeanor, S/Statute, H/High Misdemeanor, O/Other, V/Civil-Other, R/Ordinance, Z/Notice for Advisories
+tcs_charges_de_dup %<>%
+  mutate(current_offense_classification_clean = case_when(
+    current_offense_classification %in% c("C","V") ~ 1,
+    current_offense_classification == "F" ~ 2,
+    current_offense_classification == "M" ~ 3,
+    current_offense_classification == "S" ~ 4,
+    current_offense_classification == "H" ~ 5,
+    current_offense_classification == "R" ~ 6,
+    current_offense_classification == "Z" ~ 7,
+    current_offense_classification == "O" ~ 8,
+    TRUE ~ as.numeric(NA)),
+    current_offense_classification_clean = factor(current_offense_classification_clean,
+         levels = c(1,2,3,4,5,6,7,8),
+         labels = c("Civil","Felony", "Misdemeanor","Statute","High Misdemeanor","Ordinance","Notice for Advisories","Other"))) %>% ### use factor function to assign labels to values)
+  mutate(unique_charge_id = paste0(id,case_number))
+
+### create overall placement count denominator for % in cross-tabs
+unique_charge_id_n <- n_distinct(tcs_charges_de_dup$unique_charge_id[!is.na(tcs_charges_de_dup$current_offense_classification_clean)==TRUE])
+
+### all -- grouped by placement type
+tcs_charge_type <- tcs_charges_de_dup %>% 
+  distinct(unique_charge_id,.keep_all = TRUE) %>% 
+  filter(!is.na(current_offense_classification_clean)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  group_by(current_offense_classification_clean) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_charge_id),
+            `Percent of Total (%)` = round(n_distinct(unique_charge_id)/unique_charge_id_n*100, digits = 2)) %>% 
+  dplyr::rename(`Charge Classification` = current_offense_classification_clean) %>% 
+  mutate(`Charge Classification` = as.character(`Charge Classification`))
+
+### all -- overall
+tcs_charge_type_overall <- tcs_charges_de_dup %>% 
+  distinct(unique_charge_id,.keep_all = TRUE) %>% 
+  filter(!is.na(current_offense_classification_clean)==TRUE,
+         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  summarise(`Unique Count (N)` = n_distinct(unique_charge_id),
+            `Percent of Total (%)` = round(n_distinct(unique_charge_id)/unique_charge_id_n*100, digits = 2)) %>% 
+  dplyr::mutate(`Charge Classification` = "Overall") 
+
+### combine tables for kable
+tcs_charge_type_table <- rbind(tcs_charge_type,tcs_charge_type_overall)
+
+### print table via kableextra
+kable(tcs_charge_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE)
+```
+
+<br><br>
+
+## TCS Placement Data Diagram 
+
+Below is a data diagram outlining the pertinent TCS data files we have received and processed -- noting the primary keys in each to de-duplicate as well as the columns used to join the relational data together. Only entire file is displayed for placements because of size constraints (too many columns, too little room)
+
+<br>
+
+```{r echo=FALSE, out.width = '100%'}
+knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping.png")
+```
+
+<br><br>
+
+## Joining Files
+
+#### Placements and Cases 
+```{r warning=FALSE}
+tcs_placements_case <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,by=c("juvenile_nbr","case_number"))
+```
+
+<br>
+
+#### Placements and Charges 
+```{r warning=FALSE}
+tcs_placements_case <- left_join(tcs_placements_de_dup,tcs_charges_de_dup,by="case_number")
+```
+
+<br>
+
+#### Placements and Dispositions
+```{r warning=FALSE}
+tcs_placements_dispo <- left_join(tcs_placements_de_dup,tcs_dispositions_de_dup,by=c("juvenile_nbr","case_number"))
+```
+
+<br><br>
+
+## Main Questions (out to Laura/relevant staff)
+
+1.	Construction of ‘juvenile_nbr’ in ‘cases’ data file and ‘name_nbr’ in in ‘dispositions’ and ‘placements’ data files:
+a.	These appear to all be the same column – is this column created just from a youth’s name? If so, should we use it in together with one of the age variables – such as ‘defendant_age_at_filing’ – to uniquely identify one youth (essentially a roundabout way of using name and DOB)? Any caution against this approach?
+b.	I see a small number of ‘juvenile_nbr’ values of 0 – I have initially dropped these records as they don’t appear to the same individual. Is that correct? 
+
+
+2.	In looking through the raw data, there appear to be instances in which one ‘case_number’/’caseid’ (these appear to be the same field) is shared by more than one ‘juvenile_nbr’/’name_nbr’. Why would this be the case? And is the joint use of both ‘case_number’/’caseid’ and ‘juvenile_nbr’/’name_nbr’ the best way to uniquely identify a single case?
+a.	What is the definition/business rule for ‘case_number’/’caseid’? When are two offenses grouped as one ‘case_number’ and when would they appear as separate cases? 
+
+
+3.	For our analysis of placement data in the TCS transfer, we are hoping to merge 'cases', 'charges', 'dispositions', and 'placements' together. Is this possible/advisable? 
+a.	It appears as though there are ‘juvenile_nbr’/’name_nbr’s and ‘case_number’/’caseid’s which appear in the ‘cases’ and ‘placements’ data tables, but not in the ‘charges’ data table. Do you all have any initial ideas for why this may be? 
+b.	In general, it looks like we would merge these data files using ‘juvenile_nbr’/’name_nbr’ and ‘case_number’/’caseid’ (and then ‘id’ can additionally be used to link ‘charges’ and ‘dispositions’ – does this make sense? Are there better ways to determine primary keys, de-duplicate (if need be), and merge? 
+
+
+4.	What is the difference between `case_year` (noted as the "Year the case was filed.") and `year` (noted as "Year of the caseload being run/reported.")? Why does the data dictionary indicate that `year` "Must be included in some form to link tables" but not `case_year`?
+
+
+5.	Is there a code book/data dictionary available for column values – particularly for race/ethnicity, event_nbr, dispo_event_nbr, sequence_nbr, case_type
+
+
+6.	What is `ordertype` in the ‘placements’ data file? Many records with value of `ORD` as opposed to `PCN` are missing either start dates and/or end dates – why is this the case?
+
+<br><br>
