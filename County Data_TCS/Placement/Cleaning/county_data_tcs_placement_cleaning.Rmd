@@ -92,7 +92,9 @@ tcs_charges_de_dup <- tcs_charges %>%
     filter(!is.na(case_id)==TRUE,
          !is.na(id)==TRUE) %>% 
   dplyr::rename(case_number = case_id) %>% 
-  distinct(id,case_number,.keep_all = TRUE)
+  distinct(id,case_number,.keep_all = TRUE) %>% 
+  mutate(current_charge_classification_clean = ifelse(str_starts(current_offense,"712A"),"Status",current_offense_classification))
+
 
 # de-dup dispositions file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped -- will have to further de-dup by disposition later
 

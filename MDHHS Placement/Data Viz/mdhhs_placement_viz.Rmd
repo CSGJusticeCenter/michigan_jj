@@ -1,0 +1,1138 @@
+---
+title: "mdhhs_placement_viz"
+author: "Andrew Byrum"
+date: "2/11/2022"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    collapsed: true
+---
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","formattable","ggtext")
+```
+
+
+```{r include=FALSE}
+### set theme and font size
+theme_set(theme_minimal())
+
+### disable scientific notation for viz
+options(scipen=999)
+
+### full jj blue palette for reference
+jj_pal <- c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")
+```
+
+```{r include=FALSE}
+### export jj_assessments_placement_legal_status_clean for viz
+jj_assessments_placement_legal_status_clean <- read_rds("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_mdhhs_placements_analytic_file_to_viz.txt")
+```
+
+### Slide 12, state ward placement disposition risk assessments (with missingness plotted)
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
+jj_placement_episode_count_disp_risk_placement_table <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_does_count==1,
+         !is.na(disposition_risk_level_earliest_use)==TRUE,
+         place_no_of_earliest_cci_mdhhs == placement_episode_no,
+         !is.na(living_arrangement_grouped_out_of_home_only)==TRUE,
+         placement_begin_date_year%in%c(2016,2017,2018,2019,2020),
+         legal_status_ward_flag == "State Ward") %>% 
+  group_by(living_arrangement_grouped_out_of_home_only) %>% 
+  summarize(`Overall (N)` = n_distinct(placement_unique_id),
+            `Overall (N), Non-Missing` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]),
+            `Low` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Low"])/n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]), 
+            `Moderate` =  n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Moderate"])/n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]), 
+            `High` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="High"])/n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]),
+`Missing` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Missing"])/`Overall (N)`) %>% 
+  ungroup() %>% 
+  dplyr::select(-`Overall (N)`)
+
+## use gather for plotting -- pivot from wide to long
+jj_placement_episode_count_disp_risk_placement_table_plot <- jj_placement_episode_count_disp_risk_placement_table %>%
+  gather(risk_level, value, `Overall (N), Non-Missing`:`Missing`) %>% 
+    mutate(risk_level = factor(risk_level,
+                                levels = c("Low","Moderate","High","Missing"))) %>% 
+  group_by(living_arrangement_grouped_out_of_home_only) %>% 
+  mutate(`Overall (N), Non-Missing` = as.numeric(value[is.na(risk_level)==TRUE])) %>% 
+  ungroup() %>% 
+  mutate(living_arrangement_grouped_out_of_home_only = ifelse(living_arrangement_grouped_out_of_home_only=="CCI","CCI Facility", "MDHHS Facility")) %>% 
+  filter(!is.na(risk_level)==TRUE) %>% 
+  mutate(living_arrangement_n = paste0(
+      "<span style = 'font-size:16pt'>", living_arrangement_grouped_out_of_home_only, "</span><br><br>",
+      "<span style = 'font-size:12pt'><em>", "N: ", `Overall (N), Non-Missing`,"</span><br>",
+      "<span style = 'font-size:10pt'><em>","(Non-Missing)", "</em></span>"),
+      ) 
+
+### plot
+ggplot(data = jj_placement_episode_count_disp_risk_placement_table_plot,
+            mapping = aes(x = living_arrangement_n, 
+                          y = value, 
+                          fill = forcats::fct_rev(risk_level))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("gray70","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(label=scales::percent_format(accuracy = 1),
+                     limits=c(min(0), max(.75))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(hjust = 0.5),
+        axis.ticks.length = unit(0, "cm"),
+        axis.text.y = element_markdown()) + 
+    labs(y = NULL, x = NULL,
+      caption = "% for Low, Moderate, High risk reflects the % of first CCI/MDHHS placements which are non-missing in each risk category.\n% missingness indicates the % of all first CCI/MDHHS placements that have missing disposition risk assessment data.\nAs a result the percentages for low, moderate, and high will add up to 100% and should be considered\nseparately from the % missing.",
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(value, accuracy = .1), group = forcats::fct_rev(risk_level)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.3,
+                   box.padding = 0.15,
+                  fill = "white",
+                  color = c("#9ed4ef","#9ed4ef","#0db4e4","#0db4e4","#007392","#007392","gray70","gray70"),
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE) 
+  
+
+# ### print table via kableextra
+# kable(jj_placement_episode_count_disp_risk_placement_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+#    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+#   add_footnote("% for Low, Moderate, High risk reflects the % of first CCI/MDHHS placements which are non-missing in each risk category. % missingness indicates the % of all first CCI/MDHHS placements that have missing disposition risk assessment data. As a result the percentages for low, moderate, and high will add up to 100% and should be considered separately from the % missing row", notation = "none")
+```
+
+<br><br>
+
+### Slide 12, state ward placement disposition risk assessments (with missingness not plotted)
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
+jj_placement_episode_count_disp_risk_placement_table <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_does_count==1,
+         !is.na(disposition_risk_level_earliest_use)==TRUE,
+         place_no_of_earliest_cci_mdhhs == placement_episode_no,
+         !is.na(living_arrangement_grouped_out_of_home_only)==TRUE,
+         placement_begin_date_year%in%c(2016,2017,2018,2019,2020),
+         legal_status_ward_flag == "State Ward") %>% 
+  group_by(living_arrangement_grouped_out_of_home_only) %>% 
+  summarize(`Overall (N)` = n_distinct(placement_unique_id),
+            `Overall (N), Missing` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Missing"]),
+            `Low` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Low"])/n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]), 
+            `Moderate` =  n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Moderate"])/n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]), 
+            `High` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="High"])/n_distinct(placement_unique_id[disposition_risk_level_earliest_use!="Missing"]),
+`Missing` = n_distinct(placement_unique_id[disposition_risk_level_earliest_use=="Missing"])/`Overall (N)`) %>% 
+  ungroup() %>% 
+  dplyr::select(-`Overall (N)`)
+
+## use gather for plotting -- pivot from wide to long
+jj_placement_episode_count_disp_risk_placement_table_plot <- jj_placement_episode_count_disp_risk_placement_table %>%
+  gather(risk_level, value, `Overall (N), Missing`:`Missing`) %>% 
+    mutate(risk_level = factor(risk_level,
+                                levels = c("Low","Moderate","High","Missing"))) %>% 
+  group_by(living_arrangement_grouped_out_of_home_only) %>% 
+  mutate(`Overall (N), Missing` = as.numeric(value[is.na(risk_level)==TRUE]),
+         `Placement Episodes Missing Assessments` = scales::percent(mean(as.numeric(value[risk_level=="Missing"]), na.rm = TRUE), 
+                                                            accuracy = 1)) %>% 
+  ungroup() %>% 
+  mutate(living_arrangement_grouped_out_of_home_only = ifelse(living_arrangement_grouped_out_of_home_only=="CCI","CCI Facility", "MDHHS Facility")) %>% 
+  filter(!is.na(risk_level)==TRUE,
+         risk_level!="Missing") %>% 
+  mutate(living_arrangement_n = paste0(
+      "<span style = 'font-size:16pt'>", living_arrangement_grouped_out_of_home_only, "</span><br><br>",
+      "<span style = 'font-size:12pt'><em>", "No Assessment Data:","</span><br>",
+      "<span style = 'font-size:10pt'><em>", "N: ",`Overall (N), Missing`," (",`Placement Episodes Missing Assessments`,")", "</em></span>")
+      ) 
+
+### plot
+ggplot(data = jj_placement_episode_count_disp_risk_placement_table_plot,
+            mapping = aes(x = living_arrangement_n, 
+                          y = value, 
+                          fill = forcats::fct_rev(risk_level))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(label=scales::percent_format(accuracy = 1),
+                     limits=c(min(0), max(.75))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(hjust = 0.5),
+        axis.ticks.length = unit(0, "cm"),
+        axis.text.y = element_markdown()) + 
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(value, accuracy = .1), group = forcats::fct_rev(risk_level)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.3,
+                   box.padding = 0.15,
+                  fill = "white",
+                  color = c("#9ed4ef","#9ed4ef","#0db4e4","#0db4e4","#007392","#007392"),
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE) 
+  
+
+# ### print table via kableextra
+# kable(jj_placement_episode_count_disp_risk_placement_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+#    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
+#   add_footnote("% for Low, Moderate, High risk reflects the % of first CCI/MDHHS placements which are non-missing in each risk category. % missingness indicates the % of all first CCI/MDHHS placements that have missing disposition risk assessment data. As a result the percentages for low, moderate, and high will add up to 100% and should be considered separately from the % missing row", notation = "none")
+```
+
+<br><br>
+
+### Slide 13, Unique placements episodes per 10k youth by county (state and dual wards included in rate)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
+df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name =  gsub(" County", "", county_name)) %>% 
+  dplyr::select(county_name,overall_10_17_population)
+
+### create overall file for denominator in % calculation below
+jj_placement_episode_county <- jj_assessments_placement_legal_status_clean %>% 
+  filter(!is.na(county_name)==TRUE) %>% 
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
+  group_by(county_name) %>% 
+  summarize(placement_episode_count = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020) & placement_episode_does_count==1])) %>% 
+  ungroup() %>% 
+  left_join(df_ezapop_race_ethnicity_10_17_county_level, by = "county_name") %>% 
+  mutate(placements_per_10k_youth = round(placement_episode_count/overall_10_17_population*10000, digits = 1))
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- jj_placement_episode_county %>%
+  pull(placements_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_place_rate <- c("44 to 220","22 to 44","8 to 22", "0 to 8")
+
+### create a new variable with the specified quantiles
+jj_placement_episode_county %<>%
+  mutate(placements_per_10k_youth_quartile = cut(-placements_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_place_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+### plot
+ggplot(data = jj_placement_episode_county,
+            mapping = aes(x = reorder(county_anonymous, placements_per_10k_youth), y = placements_per_10k_youth, fill = placements_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(225))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 55, y = 150, label = "Each bar represents one county's\n placement episode rate", colour = "#00475d", size = 5) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Placements per 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br><br>
+
+### Other option for slide 13, Unique placements episodes per 10k youth by county (state wards only)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
+df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name =  gsub(" County", "", county_name)) %>% 
+  dplyr::select(county_name,overall_10_17_population)
+
+### create overall file for denominator in % calculation below
+jj_placement_episode_county <- jj_assessments_placement_legal_status_clean %>% 
+  filter(!is.na(county_name)==TRUE,
+         legal_status_ward_flag == "State Ward") %>% 
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
+  group_by(county_name) %>% 
+  summarize(placement_episode_count = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020) & placement_episode_does_count==1])) %>% 
+  ungroup() %>% 
+  left_join(df_ezapop_race_ethnicity_10_17_county_level, by = "county_name") %>% 
+  mutate(placements_per_10k_youth = round(placement_episode_count/overall_10_17_population*10000, digits = 1))
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- jj_placement_episode_county %>%
+  pull(placements_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_place_rate <- c("42 to 206","19 to 42","6 to 19", "0 to 6")
+
+### create a new variable with the specified quantiles
+jj_placement_episode_county %<>%
+  mutate(placements_per_10k_youth_quartile = cut(-placements_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_place_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+### plot
+ggplot(data = jj_placement_episode_county,
+            mapping = aes(x = reorder(county_anonymous, placements_per_10k_youth), y = placements_per_10k_youth, fill = placements_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(225))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 55, y = 150, label = "Each bar represents one county's\n placement episode rate", colour = "#00475d", size = 5) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Placements per 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br><br>
+
+
+### Slide 19, Detention, CCI, and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added together within episode; e.g. total detention LOS for one placement episode may add the LOS for several unique detention placements)
+
+Note: Placement episodes with only in home and/or detention/jail placements are excluded 
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+### create grouped los bins
+jj_assessments_placement_legal_status_clean %<>%
+  # group_by(placement_episode_unique_id) %>% 
+  # mutate(los_overall_cci_only_grouped = sum(los_overall_cci_only, na.rm = TRUE)) %>% 
+  # ungroup() %>% 
+  mutate(los_overall_cci_only_grouped_bin = case_when(
+    los_overall_cci_only<32 & los_overall_cci_only!=0 ~ 1,
+    los_overall_cci_only>=32 & los_overall_cci_only<91 ~ 2,
+    los_overall_cci_only>=91 & los_overall_cci_only<181 ~ 3,
+    los_overall_cci_only>=181 & los_overall_cci_only<=365 ~ 4, 
+    los_overall_cci_only>=365 & los_overall_cci_only<=730 ~ 5, 
+    los_overall_cci_only>730 ~ 6, 
+    TRUE ~ as.numeric(NA)),
+    los_overall_cci_only_grouped_bin = factor(los_overall_cci_only_grouped_bin,
+         levels = c(1,2,3,4,5,6),
+         labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+
+jj_assessments_placement_legal_status_clean %<>%
+  # group_by(placement_episode_unique_id) %>% 
+  # mutate(los_overall_mdhhs_only_grouped = sum(los_overall_mdhhs_only, na.rm = TRUE)) %>% 
+  # ungroup() %>% 
+  mutate(los_overall_mdhhs_only_grouped_bin = case_when(
+    los_overall_mdhhs_only<32 & los_overall_mdhhs_only!=0 ~ 1,
+    los_overall_mdhhs_only>=32 & los_overall_mdhhs_only<91 ~ 2,
+    los_overall_mdhhs_only>=91 & los_overall_mdhhs_only<181 ~ 3,
+    los_overall_mdhhs_only>=181 & los_overall_mdhhs_only<=365 ~ 4, 
+    los_overall_mdhhs_only>=365 & los_overall_mdhhs_only<=730 ~ 5, 
+    los_overall_mdhhs_only>730 ~ 6, 
+    TRUE ~ as.numeric(NA)),
+    los_overall_mdhhs_only_grouped_bin = factor(los_overall_mdhhs_only_grouped_bin,
+         levels = c(1,2,3,4,5,6),
+         labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+
+jj_assessments_placement_legal_status_clean %<>%
+  # group_by(placement_episode_unique_id) %>% 
+  # mutate(los_overall_detention_only_grouped = sum(los_overall_detention_only, na.rm = TRUE)) %>% 
+  # ungroup() %>% 
+  mutate(los_overall_detention_only_grouped_bin = case_when(
+    los_overall_detention_only<32 & los_overall_detention_only!=0 ~ 1,
+    los_overall_detention_only>=32 & los_overall_detention_only<91 ~ 2,
+    los_overall_detention_only>=91 & los_overall_detention_only<181 ~ 3,
+    los_overall_detention_only>=181 & los_overall_detention_only<=365 ~ 4, 
+    los_overall_detention_only>=365 & los_overall_detention_only<=730 ~ 5, 
+    los_overall_detention_only>730 ~ 6, 
+    TRUE ~ as.numeric(NA)),
+    los_overall_detention_only_grouped_bin = factor(los_overall_detention_only_grouped_bin,
+         levels = c(1,2,3,4,5,6),
+         labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+
+### CCI
+cci_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_cci_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+cci_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_cci_only_grouped_bin)) %>% 
+    group_by(los_overall_cci_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(placement_unique_id)/(cci_los_overall_denom$n_count), digits = 2))
+
+## use gather for line plot
+cci_los_overall_table <- cci_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_overall_cci_only_grouped_bin) %>% 
+  mutate(facility = 'CCI')
+
+### MDHHS
+mdhhs_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_mdhhs_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+mdhhs_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_mdhhs_only_grouped_bin)) %>% 
+    group_by(los_overall_mdhhs_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(placement_unique_id)/(mdhhs_los_overall_denom$n_count), digits = 2))
+
+## use gather for line plot
+mdhhs_los_overall_table <- mdhhs_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_overall_mdhhs_only_grouped_bin) %>% 
+  mutate(facility = 'MDHHS')
+
+### Detention
+detention_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_detention_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+detention_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_detention_only_grouped_bin)) %>% 
+    group_by(los_overall_detention_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(placement_unique_id)/(detention_los_overall_denom$n_count), digits = 2))
+
+## use gather for line plot
+detention_los_overall_table <- detention_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_overall_detention_only_grouped_bin) %>% 
+  mutate(facility = 'Detention')
+
+mdhhs_los_overall_table_missing_row <- tribble(
+  ~`los_bins`,   ~`year`, ~`value`,    ~`facility`,                 
+  "Less than 1 Month", "n_count",as.numeric(0.00), "MDHHS") 
+
+## combine
+combined_los_overall_table <- rbind(cci_los_overall_table,mdhhs_los_overall_table,detention_los_overall_table,mdhhs_los_overall_table_missing_row) %>% 
+  mutate(facility = factor(facility,
+         levels = c("Detention","MDHHS", "CCI")))
+  
+ggplot(data = combined_los_overall_table,
+            mapping = aes(x = los_bins, y = value, fill = forcats::fct_rev(facility))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(.7))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          legend.position = "top",) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(facility)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.05,
+                  box.padding = 0.05,
+                  fill = "white",
+                  color = c("#007392","#007392","#007392","#007392","#007392","#007392",
+                            "#0db4e4","#0db4e4","#0db4e4","#0db4e4","#0db4e4","#9ed4ef",
+                            "#9ed4ef","#9ed4ef","#9ed4ef","#9ed4ef","#9ed4ef","#0db4e4"),
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Output\\Visuals\\Detention\\Images\\detention_pre_post_los_overall_plot_year_2019_10.png", detention_pre_post_los_overall_plot_year_2019, width = 8, height = 6)
+```
+
+<br><br>
+
+### Slide 30, Median LOS -- MDHHS and CCI (total time within placement episode), 2015-2018
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+jj_los_placement_episode_median <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         placement_episode_start_year%in%c(2015,2016,2017,2018),
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  summarize(`Median Length of Stay, CCI Out-of-Home (Sample N)` = n_distinct(placement_episode_unique_id[!is.na(los_overall_cci_only)==TRUE]), 
+            `Median Length of Stay, CCI Out-of-Home (Days)` = round(median(los_overall_cci_only, na.rm = TRUE), digits = 0),
+            `Median Length of Stay, MDHHS Out-of-Home (Sample N)` = n_distinct(placement_episode_unique_id[!is.na(los_overall_mdhhs_only)==TRUE]),
+            `Median Length of Stay, MDHHS Out-of-Home (Days)` = round(median(los_overall_mdhhs_only, na.rm = TRUE), digits = 0)) 
+
+### use gather for plotting
+jj_los_placement_episode_median %<>%
+  gather(facility_type_measure, median, c(`Median Length of Stay, CCI Out-of-Home (Days)`,`Median Length of Stay, MDHHS Out-of-Home (Days)`)) %>% 
+  mutate(facilty_type = ifelse(facility_type_measure=="Median Length of Stay, CCI Out-of-Home (Days)", "CCI Facility","MDHHS Facility"),
+         sample_n = ifelse(facilty_type=="MDHHS Facility",`Median Length of Stay, MDHHS Out-of-Home (Sample N)`,`Median Length of Stay, CCI Out-of-Home (Sample N)`)) %>% 
+  mutate(facilty_type_n = paste0(
+      "<span style = 'font-size:16pt'>", facilty_type, "</span><br><br>",
+      "<span style = 'font-size:12pt'><em>", "Placement Episodes (N): ", sample_n,"</em></span>"))
+
+    #      %>%
+    # mutate(rri_measure = factor(rri_measure,
+    #                             levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)")))
+
+### plot
+ggplot(data = jj_los_placement_episode_median,
+            mapping = aes(x = facilty_type_n, y = median, fill = facilty_type_n)) +
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("#007392","#007392")) +
+    scale_y_continuous(limits=c(min(0), max(500))) +
+    scale_x_discrete(labels = scales::wrap_format(15), limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          axis.text.y = element_markdown()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL) +
+    coord_flip() +
+  guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+  geom_label_repel(aes(label = paste0(median," Days")),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "#007392",
+                   box.padding = 0.25,
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE)
+```
+
+<br><br>
+
+### Slide 30, State Ward/Dual Ward Breakdown, Placement Episodes Starting 2015-2020
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2018 started prior to 2015) 
+
+### create denominator for percentage grouped by legal_status
+jj_assessments_placement_legal_status_clean_legal_status_denom <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         !is.na(legal_status_ward_flag)==TRUE,
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  summarize(sample_n = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)]))
+
+jj_placement_episode_count_legal_status <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         !is.na(legal_status_ward_flag)==TRUE,
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  group_by(legal_status_ward_flag) %>% 
+  summarize(sample_n = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)]),
+            sample_percent = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)])/jj_assessments_placement_legal_status_clean_legal_status_denom$sample_n) %>% 
+    dplyr::rename(legal_status = legal_status_ward_flag) 
+
+### plot
+ggplot(data = jj_placement_episode_count_legal_status,
+            mapping = aes(x = legal_status, y = sample_percent, fill = legal_status)) +
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("#007392","#007392")) +
+    scale_y_continuous(label=scales::percent_format(accuracy = 1),
+                       limits=c(min(0), 
+                                max(1))) +
+    scale_x_discrete(labels = scales::wrap_format(15), limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          axis.text.y = element_markdown()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL) +
+    coord_flip() +
+  guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+  geom_label_repel(aes(label = scales::percent(sample_percent, accuracy = .1)),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "#007392",
+                   box.padding = 0.25,
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE)
+```
+
+<br><br>
+
+### Slide 31, Distribution of placement episodes within a unique episode (slide 31 -- combined state/dual wards and included placement episode counts), 2015-2018
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
+jj_legal_status_placements_per_episode_overall <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         placement_episode_ends_past_study==0,
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+   summarize(`State Ward (N)` = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018) & legal_status_ward_flag=="State Ward"]),
+            `State Ward (%)` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018) & legal_status_ward_flag=="State Ward"])/`State Ward (N)`*100, digits = 1),
+            `Dual Ward (N)` = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018) & legal_status_ward_flag=="Dual Ward"]),
+            `Dual Ward (%)` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018) & legal_status_ward_flag=="Dual Ward"])/`Dual Ward (N)`*100, digits = 1)) %>% 
+    dplyr::mutate(`Placements per Episode` = "Overall") 
+
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
+jj_legal_status_placements_per_episode <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         placement_episode_ends_past_study==0,
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  distinct(person_id,placement_episode_segment, .keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  group_by(placements_within_episode_bin) %>% 
+   summarize(`State Ward` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018) & legal_status_ward_flag=="State Ward"])/jj_legal_status_placements_per_episode_overall$`State Ward (N)`, digits = 1),
+            `Dual Ward` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018) & legal_status_ward_flag=="Dual Ward"])/jj_legal_status_placements_per_episode_overall$`Dual Ward (N)`, digits = 1)) 
+
+### create sample_n and sample_percent for dual and state wards -- for subtext under axis labels in visual
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2018 started prior to 2015) 
+
+### create denominator for percentage grouped by legal_status
+jj_assessments_placement_legal_status_clean_legal_status_denom <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         !is.na(legal_status_ward_flag)==TRUE,
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  summarize(sample_n = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018)]))
+
+jj_placement_episode_count_legal_status <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_no==1,
+         !is.na(legal_status_ward_flag)==TRUE,
+         placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+  distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  group_by(legal_status_ward_flag) %>% 
+  summarize(sample_n = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018)]),
+            sample_percent = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018)])/jj_assessments_placement_legal_status_clean_legal_status_denom$sample_n*100, digits = 1)) %>% 
+    dplyr::rename(legal_status = legal_status_ward_flag) 
+
+### use gather for plotting
+jj_legal_status_placements_per_episode %<>%
+  gather(legal_status, percent, c(`State Ward`,`Dual Ward`)) %>%
+  left_join(jj_placement_episode_count_legal_status, by = "legal_status") %>% 
+    mutate(legal_status_n = paste0(
+      "<span style = 'font-size:16pt'>", legal_status, "</span><br><br>",
+      "<span style = 'font-size:12pt'><em>", "Placement Episodes:", "</span><br>",
+      "<span style = 'font-size:12pt'><em>","N: ",sample_n,"; ", sample_percent, "%","</em></span>"))
+
+### plot
+ggplot(data = jj_legal_status_placements_per_episode, aes(y = percent, x = legal_status_n, fill = forcats::fct_rev(placements_within_episode_bin))) + 
+  geom_bar(stat = "identity", color = "gray80") +
+  scale_x_discrete() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = rev(c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8"))) +
+  guides(fill = guide_legend(reverse = TRUE,
+                             title.position = "top",
+                             label.position = "bottom",
+                             keywidth = 3,
+                             nrow = 1)) +
+  labs(x = NULL, y = NULL,
+       fill = "Individual Placements per Episode",
+       caption = NULL,
+       title = NULL,
+       subtitle = NULL) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        # axis.text.y = element_text(face = "bold", hjust = 1, size = 15),
+        axis.ticks.length = unit(0, "cm"),
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.y = element_markdown()) +
+  coord_flip()
+```
+
+<br><br>
+
+### Slide 32, prior history of mdhhs placement
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### create placements per episode bins
+jj_assessments_placement_legal_status_clean %<>%
+  mutate(prior_placement_episodes_bin = case_when(
+    prior_placement_episodes==0 ~ 1,
+    prior_placement_episodes==1 ~ 2,
+    prior_placement_episodes>1 ~ 3,
+    TRUE ~ as.numeric(NA)),
+    prior_placement_episodes_bin = factor(prior_placement_episodes_bin,
+         levels = c(1,2,3),
+         labels = c("0", "1", "2+"))) ### use factor function to assign labels to values
+
+### total unique placement episodes -- overall
+### using only as denominator for percentages in jj_placement_episode_count_disp_risk_table
+jj_placement_episode_history_overall <- jj_assessments_placement_legal_status_clean %>% 
+  filter(!is.na(prior_placement_episodes_bin)==TRUE,
+         !is.na(placement_episode_segment)==TRUE,
+         placement_episode_does_count==1) %>% 
+  summarize(`Unique Placement Episodes, State Ward` = n_distinct(placement_episode_unique_id[legal_status_ward_flag=="State Ward" & placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)]),
+            `Unique Placement Episodes, Dual Ward` = n_distinct(placement_episode_unique_id[legal_status_ward_flag=="Dual Ward" & placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)])) 
+
+### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
+jj_placement_episode_history_table <- jj_assessments_placement_legal_status_clean %>% 
+  filter(!is.na(prior_placement_episodes_bin)==TRUE,
+         !is.na(placement_episode_segment)==TRUE,
+         placement_episode_does_count==1) %>% 
+  group_by(prior_placement_episodes_bin) %>% 
+ summarize(
+   # Unique Placement Episodes, State Ward (N)` = n_distinct(placement_episode_unique_id[legal_status_ward_flag=="State Ward" & placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)]),
+           `State Ward` = n_distinct(placement_episode_unique_id[legal_status_ward_flag=="State Ward" & placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)])/jj_placement_episode_history_overall$`Unique Placement Episodes, State Ward`,
+            # `Unique Placement Episodes, Dual Ward (N)` = n_distinct(placement_episode_unique_id[legal_status_ward_flag=="Dual Ward" & placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)]),
+           `Dual Ward` = n_distinct(placement_episode_unique_id[legal_status_ward_flag=="Dual Ward" & placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)])/jj_placement_episode_history_overall$`Unique Placement Episodes, Dual Ward`) %>% 
+  ungroup()
+
+### use gather for plotting
+jj_placement_episode_history_table %<>%
+  gather(legal_status, percent, c(`State Ward`,`Dual Ward`))
+
+### plot
+ggplot(data = jj_placement_episode_history_table,
+            mapping = aes(x = legal_status, y = percent, fill = prior_placement_episodes_bin)) +
+  geom_bar(stat = "identity", position = "dodge") +
+    scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
+    scale_y_continuous(label=scales::percent_format(accuracy = 1),
+                       limits=c(min(0), 
+                                max(.8))) +
+    scale_x_discrete(labels = scales::wrap_format(15), limits = rev) +
+    theme(strip.text.x = element_text(face = "bold")) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Prior MDHHS\nPlacement Episodes") +
+  guides(color = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(percent, accuracy = 1), group = prior_placement_episodes_bin),
+                 position = position_dodge(.9),
+                  # direction = 'y',
+                  vjust = 0.75,
+                  label.padding = 0.075,
+                  box.padding = 0.075,
+                  fill = "white",
+                  color = c("#007392","#0db4e4","#9ed4ef",
+                            "#007392","#0db4e4","#9ed4ef"),
+                   fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE) 
+```
+
+<br><br>
+
+### Slide 37, RRI disparities, placement episode disparities
+
+NOTE: I have not included American Indian youth in the visual because of their small sample size (N=68 across 5 years) and huge RRI (around 7 times as likely as White youth to be placed by MDHHS). I think we landed on noting this apparent disparity in text/out loud during the presentation but not using the specific number since we are concerned about drawing too precise of a quantitative conclusion from such a small cohort of youth
+
+Create new category for legal status -- only state ward and any dual ward or initial legal status for study period; filter for legal status of first episode within study window: placement_episode_segment_episode_counts_only==1 & legal_status=="State Ward"
+
+ADD CAPTION EXPLAINING LEGAL STATUS DECISION AND EXCLUSION OF AMERICAN INDIAN YOUTH FROM VIZ
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# NOTE: Wayne County entirely excluded from calculation (Soleil indicated that Wayne County provides their own services, rarely send youth to state (only in specific waiver cases))
+
+### pull in ezapop population data without wayne county
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for RRI calculation
+df_ezapop_race_ethnicity_10_17_no_wayne <- readr::read_delim("C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi_state_level_no_wayne.txt", delim = "|")
+
+### create clean lookup table to join
+df_ezapop_race_ethnicity_lookup_no_wayne <-  data.frame(race  = c("Black", "Hispanic", "American Indian/Alaskan Native", "Other", "White"),
+                  `pop_10_17_no_wayne` = c(df_ezapop_race_ethnicity_10_17_no_wayne$not_hispanic_black, df_ezapop_race_ethnicity_10_17_no_wayne$hispanic_any_race, df_ezapop_race_ethnicity_10_17_no_wayne$not_hispanic_am_in_ak_native, "NA", df_ezapop_race_ethnicity_10_17_no_wayne$not_hispanic_white)
+                  ) %>% 
+  mutate(pop_10_17_no_wayne = as.numeric(pop_10_17_no_wayne))
+
+### join lookup to analytic file
+jj_assessments_placement_legal_status_clean_no_wayne <- left_join(jj_assessments_placement_legal_status_clean,df_ezapop_race_ethnicity_lookup_no_wayne, by = c("race_csg_4"="race")) %>% 
+  filter(county_name!="Wayne")
+
+### white, non-hispanic only for rri calculation
+jj_placement_race_ethnicity_rri_table_white <- jj_assessments_placement_legal_status_clean_no_wayne %>% 
+  filter(!is.na(race_csg_4)==TRUE,
+         race_csg_4=="White") %>% 
+  summarize(`Unique Youth Placed (N)` = n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Youth Placed per 10k Youth (No Wayne)` = round(n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            `Unique Youth Placed, RRI (to white youth)` = NA,
+            `Unique Youth Placed, State Ward (N)` = n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="State Ward"]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Youth Placed per 10k Youth (No Wayne), State Ward` = round(n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="State Ward"])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            `Unique Youth Placed, State Ward, RRI (to white youth)` = NA,
+                        `Unique Youth Placed, Dual Ward (N)` = n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="Dual Ward"]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Youth Placed per 10k Youth (No Wayne), Dual Ward` = round(n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="Dual Ward"])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            `Unique Youth Placed, Dual Ward, RRI (to white youth)` = NA,
+            `Unique Placements (N)` = n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Placements per 10k Youth (No Wayne)` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            # `Unique Placements, RRI (to white youth)` = NA,
+            `Unique Placements, RRI (to white youth)` = NA,
+`Unique Placement Episodes (N)` = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020 & placement_episode_does_count==1)]),
+# `Unique Placement Episodes per 10k Youth` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000,  digits = 1),
+`Unique Placement Episodes per 10k Youth (No Wayne)` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020) & placement_episode_does_count==1])/mean(pop_10_17_no_wayne)*10000,  digits = 1),
+            # `Unique Placement Episodes, RRI (to white youth)` = NA,
+`Unique Placement Episodes, RRI (to white youth)` = NA) %>% 
+  dplyr::mutate(`Race/Ethnicity` = "White")
+
+
+####### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
+jj_placement_race_ethnicity_rri_table <- jj_assessments_placement_legal_status_clean_no_wayne %>% 
+  filter(!is.na(race_csg_4)==TRUE,
+         race_csg_4 %in% c("Black","Hispanic","American Indian/Alaskan Native")) %>% 
+  group_by(race_csg_4) %>% 
+  summarize(`Unique Youth Placed (N)` = n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Youth Placed per 10k Youth (No Wayne)` = round(n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            # `Unique Placements, RRI (to white youth)` = round(`Unique Placements per 10k Youth`/jj_placement_race_ethnicity_rri_table_white$`Unique Placements per 10k Youth`, digits = 2),
+            `Unique Youth Placed, RRI (to white youth)` = round(`Unique Youth Placed per 10k Youth (No Wayne)`/jj_placement_race_ethnicity_rri_table_white$`Unique Youth Placed per 10k Youth (No Wayne)`, digits = 2),
+                        `Unique Youth Placed, State Ward (N)` = n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="State Ward"]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Youth Placed per 10k Youth (No Wayne), State Ward` = round(n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="State Ward"])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            `Unique Youth Placed, State Ward, RRI (to white youth)` = round(`Unique Youth Placed per 10k Youth (No Wayne), State Ward`/jj_placement_race_ethnicity_rri_table_white$`Unique Youth Placed per 10k Youth (No Wayne), State Ward`, digits = 2),
+                        `Unique Youth Placed, Dual Ward (N)` = n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="Dual Ward"]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Youth Placed per 10k Youth (No Wayne), Dual Ward` = round(n_distinct(person_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1 & placement_episode_segment_episode_counts_only==1 & legal_status_ward_flag=="Dual Ward"])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            `Unique Youth Placed, Dual Ward, RRI (to white youth)` = round(`Unique Youth Placed per 10k Youth (No Wayne), Dual Ward`/jj_placement_race_ethnicity_rri_table_white$`Unique Youth Placed per 10k Youth (No Wayne), Dual Ward`, digits = 2),
+            `Unique Placements (N)` = n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1]),
+            # `Unique Placements per 10k Youth` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000, digits = 1), 
+             `Unique Placements per 10k Youth (No Wayne)` = round(n_distinct(placement_unique_id[placement_begin_date_year%in%c(2015,2016,2017,2018,2019,2020) & placement_does_count==1])/mean(pop_10_17_no_wayne)*10000, digits = 1), 
+            # `Unique Placements, RRI (to white youth)` = round(`Unique Placements per 10k Youth`/jj_placement_race_ethnicity_rri_table_white$`Unique Placements per 10k Youth`, digits = 2),
+            `Unique Placements, RRI (to white youth)` = round(`Unique Placements per 10k Youth (No Wayne)`/jj_placement_race_ethnicity_rri_table_white$`Unique Placements per 10k Youth (No Wayne)`, digits = 2),
+`Unique Placement Episodes (N)` = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020 & placement_episode_does_count==1)]),
+# `Unique Placement Episodes per 10k Youth` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020)])/mean(pop_10_17)*10000,  digits = 1),
+`Unique Placement Episodes per 10k Youth (No Wayne)` = round(n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020) & placement_episode_does_count==1])/mean(pop_10_17_no_wayne)*10000,  digits = 1),
+            # `Unique Placement Episodes, RRI (to white youth)` = round(`Unique Placement Episodes per 10k Youth`/jj_placement_race_ethnicity_rri_table_white$`Unique Placement Episodes per 10k Youth`, digits = 2),
+`Unique Placement Episodes, RRI (to white youth)` = round(`Unique Placement Episodes per 10k Youth (No Wayne)`/jj_placement_race_ethnicity_rri_table_white$`Unique Placement Episodes per 10k Youth (No Wayne)`, digits = 2)) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Race/Ethnicity` = race_csg_4) 
+
+### merge tables together
+jj_placement_race_ethnicity_rri_plot <- rbind(jj_placement_race_ethnicity_rri_table,jj_placement_race_ethnicity_rri_table_white) %>% 
+  filter(`Race/Ethnicity` %in% c("Black","Hispanic")) %>% ### filter out line for white youth -- is reference group for visualization below
+  dplyr::select(`Race/Ethnicity`,`Unique Youth Placed, RRI (to white youth)`,`Unique Youth Placed, State Ward, RRI (to white youth)`,`Unique Youth Placed, Dual Ward, RRI (to white youth)`)
+
+### use gather for plotting
+jj_placement_race_ethnicity_rri_plot %<>%
+  gather(rri_measure, rri, `Unique Youth Placed, RRI (to white youth)`:`Unique Youth Placed, Dual Ward, RRI (to white youth)`) %>%
+    mutate(rri_measure = factor(rri_measure,
+                                levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)")))
+
+rri_labels <- c(`Unique Youth Placed, RRI (to white youth)` = "Youth Placed, Overall",
+            `Unique Youth Placed, State Ward, RRI (to white youth)` = "Youth Placed, State Wards",
+            `Unique Youth Placed, Dual Ward, RRI (to white youth)` = "Youth Placed, Dual Wards")
+
+ggplot(data = jj_placement_race_ethnicity_rri_plot, aes(y = rri, x = rri_measure, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
+  geom_bar(stat = "identity", position = "dodge", color = "gray80") +
+  geom_abline(slope=0, intercept=1,  col = "#00475d", size = 1.5) +
+  scale_x_discrete(labels = as_labeller(rri_labels),limits = rev) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(4.5))) +
+  scale_fill_manual(values = c("#0db4e4","#007392")) +
+  guides(fill = guide_legend(reverse = TRUE,
+                             title.position = "top",
+                             label.position = "bottom",
+                             keywidth = 3,
+                             nrow = 1)) +
+  labs(x = NULL, y = NULL,
+       fill = "Race/Ethnicity",
+       caption = NULL,
+       title = NULL,
+       subtitle = NULL) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
+        axis.ticks.length = unit(0, "cm")) +
+  coord_flip() + 
+  geom_label_repel(aes(label = format(round(as.numeric(rri), digits = 2), nsmall=2), group = forcats::fct_rev(`Race/Ethnicity`)),
+                  position = position_dodge(.75),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.3,
+                   box.padding = 0.15,
+                  fill = "white",
+                  color = c("#007392","#0db4e4","#007392","#0db4e4","#007392","#0db4e4"),
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE) +
+  annotate("text", x = 3.55, y = 2.9, label = "This line represents White youth (reference group)", colour = "#00475d", size = 3.5, fontface = 2)
+```
+
+<br><br>
+
+### Additional Visual: LOS disparities -- CCI/MDHHS disparities not statistically significant, but detention is for Black and White youth
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### disable scientific notation
+options(scipen=999)
+
+#############################
+### t-test between black and white youth for los
+jj_los_mean_black_white_t_test <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_start_year%in%c(2015,2016,2017,2018),
+         race_csg_4 %in% c("Black","White"),
+          placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+    distinct(person_id,placement_episode_segment, .keep_all = TRUE) %>% 
+  dplyr::select(race_csg_4,los_overall_all_included,los_overall_cci_only,los_overall_mdhhs_only,los_overall_detention_only,los_overall_in_home_only,los_overall_jail_only,los_overall_hospital_treatment_only) ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  # group_by(race_csg_4) %>% 
+  # summarize(`Mean Placement Episode Length (Days)` = round(mean(los_overall_all_included, na.rm = TRUE), digits = 0), 
+  #           `Mean Placement Episode Length (Days), AWOL Excluded` = round(mean(los_overall_awol_excluded, na.rm = TRUE), digits = 0),
+  #           `Mean Length of Stay, JJ Out-of-Home (Days)` = round(mean(los_overall_detention_cci_only, na.rm = TRUE), digits = 0),
+  #           `Mean Length of Stay, Post Out-of-Home Supervision (Days)` = round(mean(los_overall_post_detention_cci_only, na.rm = TRUE), digits = 0)) %>% 
+  #   dplyr::rename(`Race/Ethnicity` = race_csg_4)
+
+### run t-tests for white/black, white/hispanic, and white/american indian
+t_test_white_black_overall <- jj_los_mean_black_white_t_test %$% 
+  t.test(los_overall_all_included ~ race_csg_4, var.equal = FALSE)
+
+### p=0.3068
+# t_test_white_black_overall
+
+t_test_white_black_out_of_home_cci <- jj_los_mean_black_white_t_test %$% 
+  t.test(los_overall_cci_only ~ race_csg_4, var.equal = FALSE)
+
+# p=0.7294
+# t_test_white_black_out_of_home_cci
+
+t_test_white_black_out_of_home_mdhhs <- jj_los_mean_black_white_t_test %$% 
+  t.test(los_overall_mdhhs_only ~ race_csg_4, var.equal = FALSE)
+
+#0.8742
+# t_test_white_black_out_of_home_mdhhs
+
+t_test_white_black_out_of_home_detention <- jj_los_mean_black_white_t_test %$% 
+  t.test(los_overall_detention_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.000003181
+# t_test_white_black_out_of_home_detention
+
+t_test_white_black_out_of_home_detention <- jj_los_mean_black_white_t_test %$% 
+  t.test(los_overall_jail_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.1414
+# t_test_white_black_out_of_home_detention
+
+t_test_white_black_out_of_home_detention <- jj_los_mean_black_white_t_test %$% 
+  t.test(los_overall_hospital_treatment_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.33
+# t_test_white_black_out_of_home_detention
+
+#############################
+### t-test between hispanic and white youth for los
+jj_los_mean_hispanic_white_t_test <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_start_year%in%c(2015,2016,2017,2018),
+         race_csg_4 %in% c("Hispanic","White"),
+          placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+    distinct(person_id,placement_episode_segment, .keep_all = TRUE) %>% 
+  dplyr::select(race_csg_4,los_overall_all_included,los_overall_cci_only,los_overall_mdhhs_only,los_overall_detention_only,los_overall_in_home_only,los_overall_jail_only,los_overall_hospital_treatment_only) ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  # group_by(race_csg_4) %>% 
+  # summarize(`Mean Placement Episode Length (Days)` = round(mean(los_overall_all_included, na.rm = TRUE), digits = 0), 
+  #           `Mean Placement Episode Length (Days), AWOL Excluded` = round(mean(los_overall_awol_excluded, na.rm = TRUE), digits = 0),
+  #           `Mean Length of Stay, JJ Out-of-Home (Days)` = round(mean(los_overall_detention_cci_only, na.rm = TRUE), digits = 0),
+  #           `Mean Length of Stay, Post Out-of-Home Supervision (Days)` = round(mean(los_overall_post_detention_cci_only, na.rm = TRUE), digits = 0)) %>% 
+  #   dplyr::rename(`Race/Ethnicity` = race_csg_4)
+
+### run t-tests for white/hispanic
+t_test_white_hispanic_overall <- jj_los_mean_hispanic_white_t_test %$% 
+  t.test(los_overall_all_included ~ race_csg_4, var.equal = FALSE)
+
+### p=0.3685
+# t_test_white_hispanic_overall
+
+t_test_white_hispanic_out_of_home <- jj_los_mean_hispanic_white_t_test %$% 
+  t.test(los_overall_cci_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.4183
+# t_test_white_hispanic_out_of_home
+
+t_test_white_hispanic_out_of_home <- jj_los_mean_hispanic_white_t_test %$% 
+  t.test(los_overall_mdhhs_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.8138
+# t_test_white_hispanic_out_of_home
+
+t_test_white_hispanic_out_of_home <- jj_los_mean_hispanic_white_t_test %$% 
+  t.test(los_overall_detention_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.08759
+# t_test_white_hispanic_out_of_home
+
+t_test_white_hispanic_out_of_home <- jj_los_mean_hispanic_white_t_test %$% 
+  t.test(los_overall_jail_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.6096
+# t_test_white_hispanic_out_of_home
+
+t_test_white_hispanic_out_of_home <- jj_los_mean_hispanic_white_t_test %$% 
+  t.test(los_overall_hospital_treatment_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.3602
+# t_test_white_hispanic_out_of_home
+
+
+#############################
+### t-test between american indian and white youth for los
+jj_los_mean_am_ind_white_t_test <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_start_year%in%c(2015,2016,2017,2018),
+         race_csg_4 %in% c("American Indian/Alaskan Native","White"),
+          placement_episode_does_count==1) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+    distinct(person_id,placement_episode_segment, .keep_all = TRUE) %>% 
+  dplyr::select(race_csg_4,los_overall_all_included,los_overall_cci_only,los_overall_mdhhs_only,los_overall_detention_only,los_overall_in_home_only,los_overall_jail_only,los_overall_hospital_treatment_only) ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  # group_by(race_csg_4) %>% 
+  # summarize(`Mean Placement Episode Length (Days)` = round(mean(los_overall_all_included, na.rm = TRUE), digits = 0), 
+  #           `Mean Placement Episode Length (Days), AWOL Excluded` = round(mean(los_overall_awol_excluded, na.rm = TRUE), digits = 0),
+  #           `Mean Length of Stay, JJ Out-of-Home (Days)` = round(mean(los_overall_detention_cci_only, na.rm = TRUE), digits = 0),
+  #           `Mean Length of Stay, Post Out-of-Home Supervision (Days)` = round(mean(los_overall_post_detention_cci_only, na.rm = TRUE), digits = 0)) %>% 
+  #   dplyr::rename(`Race/Ethnicity` = race_csg_4)
+
+### run t-tests for white/am_ind
+t_test_white_am_ind_overall <- jj_los_mean_am_ind_white_t_test %$% 
+  t.test(los_overall_all_included ~ race_csg_4, var.equal = FALSE)
+
+### p=0.8954
+# t_test_white_am_ind_overall
+
+t_test_white_am_ind_out_of_home <- jj_los_mean_am_ind_white_t_test %$% 
+  t.test(los_overall_cci_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.5391
+# t_test_white_am_ind_out_of_home
+
+t_test_white_am_ind_out_of_home <- jj_los_mean_am_ind_white_t_test %$% 
+  t.test(los_overall_mdhhs_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.8555
+# t_test_white_am_ind_out_of_home
+
+t_test_white_am_ind_out_of_home <- jj_los_mean_am_ind_white_t_test %$% 
+  t.test(los_overall_detention_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.6772
+# t_test_white_am_ind_out_of_home
+
+t_test_white_am_ind_out_of_home <- jj_los_mean_am_ind_white_t_test %$% 
+  t.test(los_overall_jail_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.2207
+# t_test_white_am_ind_out_of_home
+
+t_test_white_am_ind_out_of_home <- jj_los_mean_am_ind_white_t_test %$% 
+  t.test(los_overall_hospital_treatment_only ~ race_csg_4, var.equal = FALSE)
+
+### p=0.8787
+# t_test_white_am_ind_out_of_home
+
+### compile p-values into df (i know there's a better way to do this)
+jj_los_mean_race_eth_t_test_p_values <- tribble(
+  ~`Race/Ethnicity`,   ~`Mean Placement Episode Length (p-value)`, ~`Statistically Significant Difference? (episode length compared to White youth)`,    ~`Mean Length of Stay, CCI Out-of-Home (p-value)`, ~`Statistically Significant Difference? (CCI out-of-home length compared to White youth)`, ~`Mean Length of Stay, MDHHS Out-of-Home (p-value)`, ~`Statistically Significant Difference? (MDHHS out-of-home length compared to White youth)`,    ~`Mean Length of Stay, Detention Out-of-Home (p-value)`, ~`Statistically Significant Difference? (Detention out-of-home length compared to White youth)`,  ~`Mean Length of Stay, Jail Out-of-Home (p-value)`, ~`Statistically Significant Difference? (Jail out-of-home length compared to White youth)`,  ~`Mean Length of Stay, Treatment/Hospital Out-of-Home (p-value)`, ~`Statistically Significant Difference? (Treatment/Hospital out-of-home length compared to White youth)`,                                               
+  "American Indian/Alaskan Native", ".895","No", ".539", "No",".861","No",".855","No",".221","No",".879","No",
+  "Black", ".306", "No", ".729", "No", ".874","No",".000","Yes",".141","No",".330","No",
+  "Hispanic", ".368","No", ".418", "No",".813","No",".088","Approaching Significance",".609","No",".360","No",
+  "White", "NA", "NA","NA", "NA","NA","NA","NA","NA","NA","NA","NA","NA") 
+
+### create df to highlight statistical significance from t-test
+jj_los_mean_race_eth_t_test_table <- jj_assessments_placement_legal_status_clean %>% 
+  filter(placement_episode_start_year%in%c(2015,2016,2017,2018),
+         race_csg_4 %in% c("American Indian/Alaskan Native","White","Black","Hispanic")) %>% ### because we are grouping episodes by initial legal status (thus only need first unique placement within each episode; must have legal status in first placement for now unless we change business rules)
+    distinct(person_id,placement_episode_segment, .keep_all = TRUE) %>% 
+  dplyr::select(race_csg_4,los_overall_all_included,los_overall_cci_only,los_overall_mdhhs_only,los_overall_detention_only,los_overall_in_home_only,los_overall_jail_only,los_overall_hospital_treatment_only) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode
+  group_by(race_csg_4) %>%
+  summarize(`Mean Placement Episode Length (Days)` = round(mean(los_overall_all_included, na.rm = TRUE), digits = 0),
+            `CCI Facility` = round(mean(los_overall_cci_only, na.rm = TRUE), digits = 0),
+            `MDHHS Facility` = round(mean(los_overall_mdhhs_only, na.rm = TRUE), digits = 0),
+            `Detention*` = round(mean(los_overall_detention_only, na.rm = TRUE), digits = 0),
+            `Mean Length of Stay, Jail Out-of-Home (Days)` = round(mean(los_overall_jail_only, na.rm = TRUE), digits = 0),
+            `Mean Length of Stay, Treatment/Hospital Out-of-Home (Days)` = round(mean(los_overall_hospital_treatment_only, na.rm = TRUE), digits = 0)) %>%
+    dplyr::rename(`Race/Ethnicity` = race_csg_4)
+
+jj_los_mean_race_eth_t_test_table <- inner_join(jj_los_mean_race_eth_t_test_table,jj_los_mean_race_eth_t_test_p_values, by="Race/Ethnicity") %>% 
+  dplyr::select(`Race/Ethnicity`,`CCI Facility`, `MDHHS Facility`,`Detention*`) %>% 
+  filter(`Race/Ethnicity` %in% c("Black","White","Hispanic"))
+
+
+### use gather for plotting
+jj_los_mean_race_eth_t_test_table %<>%
+  gather(facility, average_los, `CCI Facility`:`Detention*`) %>%
+  mutate(facility = factor(facility,
+                                levels = c("Detention*","CCI Facility","MDHHS Facility")))
+
+# rri_labels <- c(`Unique Youth Placed, RRI (to white youth)` = "Youth Placed, Overall",
+#             `Unique Youth Placed, State Ward, RRI (to white youth)` = "Youth Placed, State Wards",
+#             `Unique Youth Placed, Dual Ward, RRI (to white youth)` = "Youth Placed, Dual Wards")
+
+ggplot(data = jj_los_mean_race_eth_t_test_table, aes(y = average_los, x = facility, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
+  geom_bar(stat = "identity", position = "dodge", color = "gray80") +
+  scale_x_discrete(limits = rev) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(600))) +
+  scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
+  guides(fill = guide_legend(reverse = TRUE,
+                             title.position = "top",
+                             label.position = "bottom",
+                             keywidth = 3,
+                             nrow = 1)) +
+  labs(x = NULL, y = NULL,
+       fill = "Race/Ethnicity",
+       caption = "*The difference between the mean length of stay for all detention within a single placement episode\nfor Black youth (mean = 98 days) and White youth (mean = 55 days) is statistically significant\n(P < 0.001; there is less than one in a thousand chance of these results being the product of random chance)",
+       title = NULL,
+       subtitle = NULL) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(hjust = 0.5),
+        axis.ticks.length = unit(0, "cm"),) +
+  coord_flip() + 
+  geom_label_repel(aes(label = paste0(average_los," Days"), group = forcats::fct_rev(`Race/Ethnicity`)),
+                  position = position_dodge(.9),
+                  direction = 'x',
+                  hjust = .75,
+                  label.padding = 0.3,
+                   box.padding = 0.15,
+                  fill = "white",
+                  color = rev(c( "#007392","#0db4e4","#9ed4ef",
+                             "#007392","#0db4e4","#9ed4ef",
+                             "#007392","#0db4e4","#9ed4ef")),
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE) 
+
+```
+
+<br><br>

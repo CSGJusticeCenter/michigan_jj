@@ -25,6 +25,11 @@ jj_assessments_placement_legal_status_clean <- readr::read_delim("C:\\Users\\aby
          placement_episode_ends_past_study = ifelse(is.na(placement_episode_end_date)==TRUE,1,0),
          placement_episode_does_count = ifelse(placement_episode_placement_does_count_total_none==0,1,0)) %>% 
   ungroup() %>% 
+  mutate(placement_segment_placement_episode_counts = placement_episode_segment,
+         placement_segment_placement_episode_counts = ifelse(placement_episode_does_count!=1,NA,placement_segment_placement_episode_counts)) %>%
+  group_by(person_id) %>% 
+  mutate(placement_episode_segment_episode_counts_only = rank(placement_segment_placement_episode_counts, ties.method = "min")) %>% 
+  ungroup() %>% 
   mutate(post_cci_state_supervision_flag = ifelse(prior_placement_living_arrangement %in% c("Child Caring Institution","Out of State Child Caring Institution","MDHHS Training School") & living_arrangement %in% c("Adoptive Home","Boarding School, etc. (other)","College Dormitory","Friend/Partner Home","Independent Living","Licensed/Unlicensed Relative Home","Out of State Licensed Relative","Out of State Parental Home","Out of State Unlicensed Relative","Parental Home","Pre-Adoptive Home","Rental Home/Apartment","Terminated Parental Home","Unrelated Caregiver"),1,0),
          in_home_placement_flag = ifelse(living_arrangement %in% c("Adoptive Home","Boarding School, etc. (other)","College Dormitory","Friend/Partner Home","Independent Living","Licensed/Unlicensed Relative Home","Out of State Licensed Relative","Out of State Parental Home","Out of State Unlicensed Relative","Parental Home","Pre-Adoptive Home","Rental Home/Apartment","Terminated Parental Home","Unrelated Caregiver"),1,0),
          foster_placement_flag = ifelse(living_arrangement %in% c("Adult Foster Home","Licensed Unrelated Foster Home", "Private Agency Foster Care","Epic Guardianship Home","Juvenile Guardianship Home","Out of State Foster Home"),1,0),
@@ -381,18 +386,17 @@ kable(jj_legal_status_placements_per_episode_table, format.args = list(big.mark 
 
 ### Unique Placements per Episode by initial legal status, Distribution over Time
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
-### create age bins
+### create placements per episode bins
 jj_assessments_placement_legal_status_clean %<>%
   mutate(placements_within_episode_bin = case_when(
     placements_within_episode==1 ~ 1,
     placements_within_episode>1 & placements_within_episode<3 ~ 2,
     placements_within_episode>=3 & placements_within_episode<4 ~ 3,
-    placements_within_episode>=4 & placements_within_episode<6 ~ 4,
-    placements_within_episode>=6 ~ 5, 
+    placements_within_episode>=4 ~ 4,
     TRUE ~ as.numeric(NA)),
     placements_within_episode_bin = factor(placements_within_episode_bin,
-         levels = c(1,2,3,4,5),
-         labels = c("1", "2", "3","4 to 5","6+"))) ### use factor function to assign labels to values
+         levels = c(1,2,3,4),
+         labels = c("1", "2", "3","4+"))) ### use factor function to assign labels to values
 
 ### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015) -- denominator for table below
 jj_legal_status_placements_per_episode_denom <- jj_assessments_placement_legal_status_clean %>%
@@ -1440,6 +1444,11 @@ jj_assessments_placement_legal_status_clean %<>%
 
 # huh <- jj_assessments_placement_legal_status_clean %>%
 #   select(person_id,living_arrangement,placement_begin_date,placement_end_date,unique_placement_los,los_overall_all_included,los_overall_all_included:los_overall_out_of_home_only,placement_does_count)
+```
+
+```{r include=FALSE}
+### export jj_assessments_placement_legal_status_clean for viz
+write_rds(jj_assessments_placement_legal_status_clean, "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_mdhhs_placements_analytic_file_to_viz.txt")
 ```
 
 <br><br>
