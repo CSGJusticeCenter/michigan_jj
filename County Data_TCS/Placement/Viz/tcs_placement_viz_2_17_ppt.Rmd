@@ -1,0 +1,872 @@
+---
+title: "county_data_tcs_placement_viz"
+author: "Andrew Byrum"
+date: "2/16/2022"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    collapsed: true
+---
+
+## Visualization Plan
+
+Deadline: Produce visuals excluding charge/offense data by 2/17 at 3pm EST
+
+*Detention:*
+
+**Demographics (over time if there is any change -- explore)**
+
+*	Age
+*	Race/ethnicity
+*	Gender
+
+**LOS Distribution (with new buckets)**
+
+*	Remove legend and label each bar – ask Josh M for syntax 
+*	Note the median LOS here, too, in title
+*	Join Kalamazoo data from Becky here
+
+**Median LOS, Black/White – t-test**
+
+*Detention rate by county (per 10k youth)
+*Join Kalamazoo data from Becky here
+
+*Residential:*
+
+**Placement rate by county (per 10k youth) – combined residential and mdhhs placements**
+
+**Distribution for non-mdhhs residential and mdhhs residential separately (with new buckets)**
+
+* Remove legend and label each bar – ask Josh M for syntax 
+
+**Prior placement history/starting in 2016 for those under 16, new placements?**
+*	Ask Team for ideas here if we have time
+
+**RRI for Black/White youth comparison in placement rates**
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
+````
+
+```{r include=FALSE}
+### set theme and font size
+theme_set(theme_minimal())
+
+### disable scientific notation for viz
+options(scipen=999)
+
+### full jj blue palette for reference -- NEED NEW PALETTE
+jj_pal <- c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")
+```
+
+```{r include=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS/Analytic Files")
+
+### read in cleaned tcs file
+tcs_placements_clean <- read_rds(
+  file.path(sharepoint_tcs_data_path, "tcs_placements_de_dup.rds")) %>% 
+  mutate(place_year = year(ymd(place_begin_date))) ### create year of placement to use instead of year that case was filed -- to align with Becky's Kalamazoo data when used and to be consistent throughout
+
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_kalamazoo_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/Kalamazoo")
+```
+
+## Detention
+
+<br>
+
+###	Demographics (over time if there is any change)
+
+<br><br>
+
+### Age (no substantial change over time -- so reporting on 2016-2020 together)
+
+Note: This is age at time of case filing, not placement -- don't have placement age
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### create detention table by age -- this is denominator for percentages
+detention_age_over_time_table_denom <- tcs_placements_clean %>% 
+ filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Detention"),
+        !is.na(age_case_start_bin)==TRUE) %>%
+  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
+            `2016` = n_distinct(unique_placement_id[place_year==2016]),
+            `2017` = n_distinct(unique_placement_id[place_year==2017]),
+            `2018` = n_distinct(unique_placement_id[place_year==2018]),
+            `2019` = n_distinct(unique_placement_id[place_year==2019]),
+            `2020` = n_distinct(unique_placement_id[place_year==2020])) 
+
+### create detention table by age
+detention_age_over_time_table <- tcs_placements_clean %>% 
+ filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Detention"),
+        !is.na(age_case_start_bin)==TRUE) %>%
+  group_by(age_case_start_bin) %>% 
+  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
+            `All Cases (%)` = n_distinct(unique_placement_id)/detention_age_over_time_table_denom$`All Cases (N)`,
+            `2016 (N)` = n_distinct(unique_placement_id[place_year==2016]),
+            `2016 (%)` = n_distinct(unique_placement_id[place_year==2016])/detention_age_over_time_table_denom$`2016`,
+            `2017 (N)` = n_distinct(unique_placement_id[place_year==2017]),
+            `2017 (%)` = n_distinct(unique_placement_id[place_year==2017])/detention_age_over_time_table_denom$`2017`,
+            `2018 (N)` = n_distinct(unique_placement_id[place_year==2018]),
+            `2018 (%)` = n_distinct(unique_placement_id[place_year==2018])/detention_age_over_time_table_denom$`2018`,
+            `2019 (N)` = n_distinct(unique_placement_id[place_year==2019]),
+            `2019 (%)` = n_distinct(unique_placement_id[place_year==2019])/detention_age_over_time_table_denom$`2019`,
+            `2020 (N)` = n_distinct(unique_placement_id[place_year==2020]),
+            `2020 (%)` = n_distinct(unique_placement_id[place_year==2020])/detention_age_over_time_table_denom$`2020`) %>% 
+  ungroup() 
+
+### plot only overall -- no substantial change over time
+ggplot(data = detention_age_over_time_table,
+            mapping = aes(x = age_case_start_bin, y = `All Cases (%)`, fill = age_case_start_bin)) + 
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("#007392","#007392","#007392","#007392","#007392","#007392")) +
+    scale_y_continuous(label=scales::percent_format(),
+                       limits=c(min(0),
+                                           max(.8))) +
+    scale_x_discrete(labels = scales::wrap_format(15),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold")) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL) +
+    coord_flip() +
+  guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+  geom_label_repel(aes(label = percent(`All Cases (%)`, accuracy = .1)),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "#007392",
+                  box.padding = 0.25,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+
+# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Output\\Visuals\\Detention\\Images\\df_age_under_13_breakdown_plot_4.png", df_age_under_13_breakdown_plot, width = 8, height = 6)
+```
+
+<br><br>
+
+### Race/Ethnicity (no substantial change over time -- so reporting on 2016-2020 together)
+
+NOTE: really small sample sizes for Asian and American Indian youth (N<20 for 5 years of data across 9 counties) -- exclude from descriptive table? need to discuss -- for now only reporting on Black, Hispanic, and White youth (N: 78+), but using all youth with non-missing race data for denominator
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### create detention table by race/ethnicity -- this is denominator for percentages
+detention_race_over_time_table_denom <- tcs_placements_clean %>% 
+ filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Detention"),
+        !is.na(race_csg_6)==TRUE) %>%
+  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
+            `2016` = n_distinct(unique_placement_id[place_year==2016]),
+            `2017` = n_distinct(unique_placement_id[place_year==2017]),
+            `2018` = n_distinct(unique_placement_id[place_year==2018]),
+            `2019` = n_distinct(unique_placement_id[place_year==2019]),
+            `2020` = n_distinct(unique_placement_id[place_year==2020])) 
+
+### create detention table by race/ethnicity 
+detention_race_over_time_table <- tcs_placements_clean %>% 
+ filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Detention"),
+        !is.na(race_csg_6)==TRUE,
+        race_csg_6 %in% c("Black","Hispanic","White")) %>%
+  group_by(race_csg_6) %>% 
+  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
+            `All Cases (%)` = n_distinct(unique_placement_id)/detention_race_over_time_table_denom$`All Cases (N)`,
+            `2016 (N)` = n_distinct(unique_placement_id[place_year==2016]),
+            `2016 (%)` = n_distinct(unique_placement_id[place_year==2016])/detention_race_over_time_table_denom$`2016`,
+            `2017 (N)` = n_distinct(unique_placement_id[place_year==2017]),
+            `2017 (%)` = n_distinct(unique_placement_id[place_year==2017])/detention_race_over_time_table_denom$`2017`,
+            `2018 (N)` = n_distinct(unique_placement_id[place_year==2018]),
+            `2018 (%)` = n_distinct(unique_placement_id[place_year==2018])/detention_race_over_time_table_denom$`2018`,
+            `2019 (N)` = n_distinct(unique_placement_id[place_year==2019]),
+            `2019 (%)` = n_distinct(unique_placement_id[place_year==2019])/detention_race_over_time_table_denom$`2019`,
+            `2020 (N)` = n_distinct(unique_placement_id[place_year==2020]),
+            `2020 (%)` = n_distinct(unique_placement_id[place_year==2020])/detention_race_over_time_table_denom$`2020`) %>% 
+  ungroup() 
+
+### plot only overall -- no substantial change over time
+ggplot(data = detention_race_over_time_table,
+            mapping = aes(x = race_csg_6, y = `All Cases (%)`, fill = race_csg_6)) + 
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("#007392","#007392","#007392","#007392","#007392","#007392")) +
+    scale_y_continuous(label=scales::percent_format(),
+                       limits=c(min(0),
+                                           max(.8))) +
+    scale_x_discrete(labels = scales::wrap_format(15),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold")) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL) +
+    coord_flip() +
+  guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+  geom_label_repel(aes(label = percent(`All Cases (%)`, accuracy = .1)),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "#007392",
+                  box.padding = 0.25,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+
+# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Output\\Visuals\\Detention\\Images\\df_age_under_13_breakdown_plot_4.png", df_age_under_13_breakdown_plot, width = 8, height = 6)
+```
+
+<br><br>
+
+###	Gender (no substantial change over time -- so reporting on 2016-2020 together)
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### create detention table gender -- this is denominator for percentages
+detention_gender_over_time_table_denom <- tcs_placements_clean %>% 
+ filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Detention"),
+        !is.na(gender_clean)==TRUE) %>%
+  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
+            `2016` = n_distinct(unique_placement_id[place_year==2016]),
+            `2017` = n_distinct(unique_placement_id[place_year==2017]),
+            `2018` = n_distinct(unique_placement_id[place_year==2018]),
+            `2019` = n_distinct(unique_placement_id[place_year==2019]),
+            `2020` = n_distinct(unique_placement_id[place_year==2020])) 
+
+### create detention table by gender
+detention_gender_over_time_table <- tcs_placements_clean %>% 
+ filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Detention"),
+        !is.na(gender_clean)==TRUE) %>%
+  group_by(gender_clean) %>% 
+  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
+            `All Cases (%)` = n_distinct(unique_placement_id)/detention_gender_over_time_table_denom$`All Cases (N)`,
+            `2016 (N)` = n_distinct(unique_placement_id[place_year==2016]),
+            `2016 (%)` = n_distinct(unique_placement_id[place_year==2016])/detention_gender_over_time_table_denom$`2016`,
+            `2017 (N)` = n_distinct(unique_placement_id[place_year==2017]),
+            `2017 (%)` = n_distinct(unique_placement_id[place_year==2017])/detention_gender_over_time_table_denom$`2017`,
+            `2018 (N)` = n_distinct(unique_placement_id[place_year==2018]),
+            `2018 (%)` = n_distinct(unique_placement_id[place_year==2018])/detention_gender_over_time_table_denom$`2018`,
+            `2019 (N)` = n_distinct(unique_placement_id[place_year==2019]),
+            `2019 (%)` = n_distinct(unique_placement_id[place_year==2019])/detention_gender_over_time_table_denom$`2019`,
+            `2020 (N)` = n_distinct(unique_placement_id[place_year==2020]),
+            `2020 (%)` = n_distinct(unique_placement_id[place_year==2020])/detention_gender_over_time_table_denom$`2020`) %>% 
+  ungroup() 
+
+### plot only overall -- no substantial change over time
+ggplot(data = detention_gender_over_time_table,
+            mapping = aes(x = gender_clean, y = `All Cases (%)`, fill = gender_clean)) + 
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("#007392","#007392","#007392","#007392","#007392","#007392")) +
+    scale_y_continuous(label=scales::percent_format(),
+                       limits=c(min(0),
+                                           max(.8))) +
+    scale_x_discrete(labels = scales::wrap_format(15),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold")) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL) +
+    coord_flip() +
+  guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+  geom_label_repel(aes(label = percent(`All Cases (%)`, accuracy = .1)),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "#007392",
+                  box.padding = 0.25,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+
+# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Output\\Visuals\\Detention\\Images\\df_age_under_13_breakdown_plot_4.png", df_age_under_13_breakdown_plot, width = 8, height = 6)
+```
+
+<br><br>
+
+Joining tcs and kalamazoo here:
+```{r warning=FALSE, message=FALSE}
+##############################################################################
+# JOIN TCS DETENTION DATA TO KALAMAZOO DATA FROM BECKY FOR ANALYSIS OF DETENTION LOS, MEDIAN, AND COUNTY-LEVEL RATE (PER 10K YOUTH); WE NEED TO JOIN THE DATA THAT IS UNIQUE BY DETENTION RECORD TO CALCULATE A MEDIAN LOS FOR THE NEW GROUPING (TCS + KALAMAZOO)
+##############################################################################
+
+### read in kalamazoo detention file from Becky to join with tcs detention data for los median, los distribution, and detention rate (per 10k youth)
+df_kalamazoo_detention_clean <- read_xlsx(
+  file.path(
+    sharepoint_kalamazoo_data_path, "Kalamazoo placements for TCS merge.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  filter(place_year %in% c(2016,2017,2018,2019,2020)) %>% ### only using data from same years as tcs data
+  mutate(across(where(is.POSIXct), as.Date),
+         place_type_clean = "Detention",
+         unique_placement_id = paste0(case_number,row_number())) %>% 
+  mutate(unique_placement_los = time_length(difftime(place_end_date, place_begin_date), unit = 'days'),
+         los_unique_placement_detention_only = ifelse(place_type_clean=="Detention",unique_placement_los,NA)) %>% 
+  select(unique_placement_id,county_name,place_type_clean,place_year,place_begin_date,place_end_date,unique_placement_los,los_unique_placement_detention_only) %>% 
+  distinct(unique_placement_id, .keep_all=TRUE) ### double check unique ID i've made for any counts -- nothing dropped
+
+### create tcs df that aligns with kalamazoo df for rbind -- aligning fields, placement types, years
+### only calculating LOS, median (especially median), and detention rate once we've combined these dataframes
+tcs_placements_clean_merge_to_kalamazoo <- tcs_placements_clean %>% 
+    filter(place_year %in% c(2016,2017,2018,2019,2020),
+           place_type_clean=="Detention") %>% ### detention only
+  select(unique_placement_id,county_name,place_type_clean,place_year,place_begin_date,place_end_date,unique_placement_los,los_unique_placement_detention_only) %>% 
+  distinct(unique_placement_id, .keep_all=TRUE) ### double check unique ID i've made for any counts -- nothing dropped
+
+### combine df_kalamazoo_detention_clean and tcs_placements_clean_merge_to_kalamazoo with append via rbind
+tcs_kalamazoo_detention_placement_level <- rbind(df_kalamazoo_detention_clean,tcs_placements_clean_merge_to_kalamazoo) %>% 
+   distinct(unique_placement_id, .keep_all=TRUE) ### double check unique ID i've made for any counts -- nothing dropped so we're good
+
+### create grouped los bins for detention
+### mirror becky's approach with the kalamazoo analysis below:
+### recode LOS_placement (1/3=1 "1-3 days") (4/7=2 "4-7 days") (8/14=3 "8-14 days") (15/30=4 "15-30 days") (31/90=5 "1-3 months") (91/max=6 ">3 months"), gen (placement_buckets)
+tcs_kalamazoo_detention_placement_level %<>%
+  mutate(los_unique_placement_detention_only_grouped_bin = case_when(
+    los_unique_placement_detention_only<3 & los_unique_placement_detention_only!=0 ~ 1,
+    los_unique_placement_detention_only>=3 & los_unique_placement_detention_only<7 ~ 2,
+    los_unique_placement_detention_only>=7 & los_unique_placement_detention_only<15 ~ 3,
+    los_unique_placement_detention_only>=15 & los_unique_placement_detention_only<=30 ~ 4,
+    los_unique_placement_detention_only>=30 & los_unique_placement_detention_only<=90 ~ 5,
+    los_unique_placement_detention_only>90 ~ 6,
+    TRUE ~ as.numeric(NA)),
+    los_unique_placement_detention_only_grouped_bin = factor(los_unique_placement_detention_only_grouped_bin,
+         levels = c(1,2,3,4,5,6),
+         labels = c("1 to 3 Days", "3 to 7 Days", "7 to 14 Days","15 to 30 Days","30 to 90 Days","90 Days+"))) ### use factor function to assign labels to values
+```
+
+<br><br>
+
+### LOS Distribution (with new buckets), includes Kalamazoo (Median is 14 days)
+
+NOTE: PALETTE IS PLACEHOLDER & STILL NEED TO REMOVE LEGEND (ASK JOSH M FOR SYNTAX)
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### calculate median LOS to mention with this plot -- it's 14 days
+# median(tcs_kalamazoo_detention_placement_level$los_unique_placement_detention_only, na.rm=TRUE)
+
+### detention
+detention_los_overall_denom <- tcs_kalamazoo_detention_placement_level %>% 
+    filter(place_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_detention_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(unique_placement_id))
+
+detention_los_overall_grouped <- tcs_kalamazoo_detention_placement_level %>% 
+    filter(place_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_detention_only_grouped_bin)) %>% 
+  group_by(los_unique_placement_detention_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(unique_placement_id)/(detention_los_overall_denom$n_count), digits = 2)) %>% 
+  ungroup() 
+
+### use gather for plot
+detention_los_overall_grouped_plot <- detention_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_unique_placement_detention_only_grouped_bin) %>% 
+  mutate(facility = 'Detention')
+
+### plot
+ggplot(data = detention_los_overall_grouped_plot,
+            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","blue","#0db4e4","#9ed4ef","#d4e9f8")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(.5))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(legend.position = "top",
+        legend.title.align=0.5,
+        plot.caption = element_text(hjust = 0.5),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.25,
+                  box.padding = 0.25,
+                  fill = "white",
+                  color = "gray40",
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+```
+
+<br><br>
+
+### Mean LOS, Black youth and White youth (w/ t-test), 2016-2018
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+######################################################
+### t-test for black and white youth mean detention los
+######################################################
+detention_los_mean_black_white_t_test <- tcs_placements_clean %>% 
+    filter(place_year %in% c(2016,2017,2018),
+           place_type_clean=="Detention",
+           race_csg_6 %in% c("Black","White"),
+           !is.na(los_unique_placement_detention_only)==TRUE) %>% 
+    distinct(unique_placement_id, .keep_all = TRUE) %>% 
+  dplyr::select(race_csg_6,los_unique_placement_detention_only) 
+
+
+### run t-test for white/black mean detention los; sample are sufficiently large (>700)
+detention_los_mean_black_white_t_test %$% 
+  t.test(los_unique_placement_detention_only ~ race_csg_6, var.equal = TRUE)
+
+### p=0.04479
+```
+
+<br>
+
+PALETTE IS (LIKELY) PLACEHOLDER
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### compile p-values into df (i know there's a better way to do this)
+jj_los_mean_race_eth_t_test_p_values <- tribble(
+  ~`Race/Ethnicity`,   ~`Mean Detention Length of Stay (p-value)`, ~`Statistically Significant Difference? (LOS compared to White youth)`,                                               
+  "Black", ".045", "Yes, at 5%",
+  "White", "NA", "NA") 
+
+### create df to highlight statistical significance from t-test
+jj_los_mean_race_eth_t_test_table <- tcs_placements_clean %>% 
+   filter(place_year %in% c(2016,2017,2018),
+           place_type_clean=="Detention",
+           race_csg_6 %in% c("Black","White"),
+           !is.na(los_unique_placement_detention_only)==TRUE) %>% 
+    distinct(unique_placement_id, .keep_all = TRUE) %>% 
+  dplyr::select(race_csg_6,los_unique_placement_detention_only) %>% 
+  group_by(race_csg_6) %>%
+  summarize(`Detention` = round(mean(los_unique_placement_detention_only, na.rm = TRUE), digits = 0)) %>%
+  dplyr::rename(`Race/Ethnicity` = race_csg_6)
+
+### join means and p-value
+jj_los_mean_race_eth_t_test_table <- inner_join(jj_los_mean_race_eth_t_test_table,jj_los_mean_race_eth_t_test_p_values, by="Race/Ethnicity") 
+
+
+### use gather for plotting
+jj_los_mean_race_eth_t_test_table %<>%
+  gather(facility, average_los, `Detention`) 
+
+### plot
+ggplot(data = jj_los_mean_race_eth_t_test_table, aes(y = average_los, x = facility, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
+  geom_bar(stat = "identity", position = "dodge", color = "gray80") +
+  scale_x_discrete(limits = rev) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(50))) +
+  scale_fill_manual(values = c("#00475d","#007392")) +
+  guides(fill = guide_legend(reverse = TRUE,
+                             title.position = "top",
+                             label.position = "bottom",
+                             keywidth = 3,
+                             nrow = 1)) +
+  labs(x = NULL, y = NULL,
+       fill = "Race/Ethnicity",
+       caption = "The difference between the mean length of stay for detention for Black youth (mean = 38.7 days)\nand White youth (mean = 32.1 days) is statistically significant (P < 0.05, which indicates less\nthan a 5% probability of concluding that a difference exists when there is no actual difference)",
+       title = NULL,
+       subtitle = NULL) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(hjust = 0.5),
+        axis.ticks.length = unit(0, "cm"),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  coord_flip() + 
+  geom_label_repel(aes(label = paste0(average_los," Days"), group = forcats::fct_rev(`Race/Ethnicity`)),
+                  position = position_dodge(.9),
+                  direction = 'x',
+                  hjust = .75,
+                  label.padding = 0.3,
+                   box.padding = 0.15,
+                  fill = "white",
+                  color = "gray40",
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE) 
+
+```
+
+<br><br>
+
+### Detention rate by county (per 10k youth) including Kalamazoo, 2016-2020 
+
+FOR INTERNAL DISCUSSION: KALAMAZOO HAS HIGHER DETENTION RATE THAN OTHER COUNTIES IN SAMPLE...REAL DIFFERENCE OR DATA COLLECTION/MEASUREMENT/MANAGEMENT DIFFERENCE?
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### rate calculation: mean(2016-2020 detentions)/county youth population * 10,000
+
+### clean county name -- extracting county name
+tcs_kalamazoo_detention_placement_level %<>%
+  mutate(county_court_name = str_to_title(county_name))
+
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
+df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name =  gsub(" County", "", county_name)) %>% 
+  dplyr::select(county_name,overall_10_17_population)
+
+### create count of detentions per year, mean count of detentions across 2016-2020, and then detention rate using ezapop data
+tcs_kalamazoo_detention_placement_level_county <- tcs_kalamazoo_detention_placement_level %>% 
+  filter(place_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(county_name)==TRUE) %>% 
+  distinct(unique_placement_id,.keep_all = TRUE,
+           place_type_clean=="Detention") %>% 
+  group_by(county_name,place_year) %>% 
+  summarize(placement_detention_count = n_distinct(unique_placement_id)) %>% 
+  ungroup() %>% 
+  group_by(county_name) %>% 
+  summarize(placement_detention_count_mean = mean(placement_detention_count,na.rm=TRUE)) %>% 
+  ungroup() %>% 
+  left_join(df_ezapop_race_ethnicity_10_17_county_level, by = "county_name") %>% 
+  mutate(detention_per_10k_youth = round(placement_detention_count_mean/overall_10_17_population*10000, digits = 1))
+
+### define quantiles we want 
+no_classes <- 4
+
+### extract quantiles from detention_per_10k_youth
+quantiles <- tcs_kalamazoo_detention_placement_level_county %>%
+  pull(detention_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels rate using quantiles object above (rounding to nearest whole number here) 
+label_place_rate <- c("138 to 228","33 to 138","23 to 33", "16 to 23")
+
+### create a new variable with the specified quantiles
+tcs_kalamazoo_detention_placement_level_county %<>%
+  mutate(detentions_per_10k_youth_quartile = cut(-detention_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_place_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+### plot
+ggplot(data = tcs_kalamazoo_detention_placement_level_county,
+            mapping = aes(x = reorder(county_anonymous, detention_per_10k_youth), y = detention_per_10k_youth, fill = detentions_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color = "gray40") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(240))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 5, y = 165, label = "Each bar represents one county's\n detention rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Detentions per 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br><br>
+
+## Residential Placement
+
+<br>
+
+### Individual placements per 10k youth by county, 2016-2020
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### rate calculation: mean(2016-2020 detentions)/county youth population * 10,000
+
+### clean county name -- extracting county name
+tcs_placements_clean %<>%
+  mutate(county_name = word(tc_sreport_courtname, 1),
+         county_name = str_to_title(county_name),
+         county_court_name = str_to_title(county_name))
+
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
+df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name =  gsub(" County", "", county_name)) %>% 
+  dplyr::select(county_name,overall_10_17_population)
+
+### create count of placements per year, mean count of placements across 2016-2020, and then placement rate
+tcs_placements_clean_county <- tcs_placements_clean %>% 
+  filter(place_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(county_name)==TRUE,
+         place_type_clean %in% c("Residential","MDHHS")) %>% ### placement must be either residential or mdhhs -- josh w's definition
+  distinct(unique_placement_id,.keep_all = TRUE) %>% 
+  group_by(county_name,place_year) %>% 
+  summarize(placement_case_count = n_distinct(unique_placement_id)) %>% 
+  ungroup() %>% 
+  group_by(county_name) %>%
+  summarize(placement_count_mean = mean(placement_case_count,na.rm=TRUE)) %>%
+  ungroup() %>%
+  left_join(df_ezapop_race_ethnicity_10_17_county_level, by = "county_name") %>% 
+  mutate(placements_per_10k_youth = round(placement_count_mean/overall_10_17_population*10000, digits = 1))
+
+### define quantiles we want 
+no_classes <- 4
+
+### extract quantiles from placements_per_10k_youth
+quantiles <- tcs_placements_clean_county %>%
+  pull(placements_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels rate using quantiles object above (rounding to nearest whole number here) 
+label_place_rate <- c("26 to 47","14 to 26","7 to 14", "2 to 7")
+
+### create a new variable with the specified quantiles
+tcs_placements_clean_county %<>%
+  mutate(placements_per_10k_youth_quartile = cut(-placements_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_place_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+### plot
+ggplot(data = tcs_placements_clean_county,
+            mapping = aes(x = reorder(county_anonymous, placements_per_10k_youth), y = placements_per_10k_youth, fill = placements_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color = "gray40") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(50))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 4.5, y = 35, label = "Each bar represents one county's\n individual placement rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Residential or MDHHS Placements\nper 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br><br>
+
+### Non-MDHHS Residential Placement LOS, Individual Placements, Bins
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### residential
+residential_los_overall_denom <- tcs_placements_clean %>% 
+    filter(place_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_residential_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(unique_placement_id))
+
+residential_los_overall_grouped <- tcs_placements_clean %>% 
+    filter(place_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_residential_only_grouped_bin)) %>% 
+  group_by(los_unique_placement_residential_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(unique_placement_id)/(residential_los_overall_denom$n_count), digits = 2)) %>% 
+  ungroup() 
+
+### use gather for plot
+residential_los_overall_grouped_plot <- residential_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_unique_placement_residential_only_grouped_bin) %>% 
+  mutate(facility = 'Residential, Non-MDHHS')
+
+### plot
+ggplot(data = residential_los_overall_grouped_plot,
+            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(.7))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          legend.position = "top",
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.25,
+                  box.padding = 0.25,
+                  fill = "white",
+                  color = "gray40",
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+
+
+```
+
+<br><br>
+
+### MDHHS Placement LOS, Individual Placements, Bins
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### MDHHS
+mdhhs_los_overall_denom <- tcs_placements_clean %>% 
+    filter(place_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_mdhhs_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(unique_placement_id))
+
+mdhhs_los_overall_grouped <- tcs_placements_clean %>% 
+    filter(place_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_mdhhs_only_grouped_bin)) %>% 
+  group_by(los_unique_placement_mdhhs_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(unique_placement_id)/(mdhhs_los_overall_denom$n_count), digits = 2)) %>% 
+  ungroup() 
+
+### use gather for plot
+mdhhs_los_overall_grouped_plot <- mdhhs_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_unique_placement_mdhhs_only_grouped_bin) %>% 
+  mutate(facility = 'MDHHS')
+
+### plot
+ggplot(data = mdhhs_los_overall_grouped_plot,
+            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(.7))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          legend.position = "top",
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.25,
+                  box.padding = 0.25,
+                  fill = "white",
+                  color = "gray40",
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+```
+
+<br><br>
+
+### RRI for Black/White youth comparison in placement rates (includes residential and mdhhs placements)
+
+Note: Really high RRI here for Black youth
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### pull in ezapop population data without wayne county
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for RRI calculation
+df_ezapop_race_ethnicity_10_17_no_wayne <- readr::read_delim("C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi_state_level_no_wayne.txt", delim = "|")
+
+### create clean lookup table to join
+df_ezapop_race_ethnicity_lookup_no_wayne <-  data.frame(race  = c("Black", "Hispanic", "American Indian/Alaskan Native", "Other", "White"),
+                  `pop_10_17_no_wayne` = c(df_ezapop_race_ethnicity_10_17_no_wayne$not_hispanic_black, df_ezapop_race_ethnicity_10_17_no_wayne$hispanic_any_race, df_ezapop_race_ethnicity_10_17_no_wayne$not_hispanic_am_in_ak_native, "NA", df_ezapop_race_ethnicity_10_17_no_wayne$not_hispanic_white)
+                  ) %>% 
+  mutate(pop_10_17_no_wayne = as.numeric(pop_10_17_no_wayne))
+
+### join ezapop lookup to analytic file
+tcs_placements_clean_county_pop <- left_join(tcs_placements_clean,df_ezapop_race_ethnicity_lookup_no_wayne, by = c("race_csg_6"="race")) 
+
+### white as reference group for rri calculation
+tcs_placement_race_ethnicity_rri_table_white_reference <- tcs_placements_clean_county_pop %>% 
+  filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Residential","MDHHS"),
+         !is.na(race_csg_6)==TRUE,
+         race_csg_6=="White") %>% 
+  summarize(`Individual Placements (N)` = n_distinct(unique_placement_id),
+            `Individual Placements per 10k Youth` = round(n_distinct(unique_placement_id)/mean(pop_10_17_no_wayne)*10000, digits = 1),
+            `Individual Placements, RRI (to white youth)` = NA,
+) %>% 
+  dplyr::mutate(`Race/Ethnicity` = "White")
+
+### black and hispanic youth as groups to compare against white youth for rri calculation
+tcs_placement_race_ethnicity_rri_table_black_hispanic <- tcs_placements_clean_county_pop %>% 
+  filter(place_year%in%c(2016,2017,2018,2019,2020),
+         place_type_clean %in% c("Residential","MDHHS"),
+         !is.na(race_csg_6)==TRUE,
+         race_csg_6 %in% c("Black","Hispanic")) %>% 
+  group_by(race_csg_6) %>% 
+  summarize(`Individual Placements (N)` = n_distinct(unique_placement_id),
+            `Individual Placements per 10k Youth` = round(n_distinct(unique_placement_id)/mean(pop_10_17_no_wayne)*10000, digits = 1),
+            `Individual Placements, RRI (to white youth)` = round(`Individual Placements per 10k Youth`/tcs_placement_race_ethnicity_rri_table_white_reference$`Individual Placements per 10k Youth`, digits = 2)) %>% 
+  ungroup() %>% 
+  dplyr::rename(`Race/Ethnicity` = race_csg_6) 
+
+### merge tables together
+tcs_placement_race_ethnicity_rri_plot <- rbind(tcs_placement_race_ethnicity_rri_table_white_reference,tcs_placement_race_ethnicity_rri_table_black_hispanic) %>% 
+  filter(`Race/Ethnicity` %in% c("Black","Hispanic")) %>% ### filter out line for white youth -- is reference group for visualization below
+  dplyr::select(`Race/Ethnicity`,`Individual Placements, RRI (to white youth)`)
+
+### use gather for plotting
+tcs_placement_race_ethnicity_rri_plot %<>%
+  gather(rri_measure, rri, `Individual Placements, RRI (to white youth)`) 
+
+
+# %>%
+#     mutate(rri_measure = factor(rri_measure,
+#                                 levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)")))
+
+rri_labels <- c(`Individual Placements, RRI (to white youth)` = "Residential Placements")
+
+ggplot(data = tcs_placement_race_ethnicity_rri_plot, aes(y = rri, x = rri_measure, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
+  geom_bar(stat = "identity", position = "dodge", color = "gray80") +
+  geom_abline(slope=0, intercept=1,  col = "#00475d", size = 1.5) +
+  scale_x_discrete(labels = as_labeller(rri_labels),limits = rev) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(5.5))) +
+  scale_fill_manual(values = c("#0db4e4","#007392")) +
+  guides(fill = guide_legend(reverse = TRUE,
+                             title.position = "top",
+                             label.position = "bottom",
+                             keywidth = 3,
+                             nrow = 1)) +
+  labs(x = NULL, y = NULL,
+       fill = "Race/Ethnicity",
+       caption = NULL,
+       title = NULL,
+       subtitle = NULL) +
+  theme(legend.position = "top",
+        legend.title.align=0.5,
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+        axis.ticks.length = unit(0, "cm")) +
+  coord_flip() + 
+  geom_label_repel(aes(label = format(round(as.numeric(rri), digits = 2), nsmall=2), group = forcats::fct_rev(`Race/Ethnicity`)),
+                  position = position_dodge(.75),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.3,
+                   box.padding = 0.15,
+                  fill = "white",
+                  color = c("gray40"),
+                  fontface = "bold",
+                   na.rm = TRUE,
+                   show.legend = FALSE) +
+  annotate("text", x = 1.55, y = 2.7, label = "This line represents White youth (reference group)", colour = "#00475d", size = 4, fontface = 2)
+```
+
+<br><br>

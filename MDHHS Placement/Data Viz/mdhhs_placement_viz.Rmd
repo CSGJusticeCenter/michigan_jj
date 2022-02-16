@@ -32,7 +32,7 @@ jj_pal <- c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")
 jj_assessments_placement_legal_status_clean <- read_rds("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_mdhhs_placements_analytic_file_to_viz.txt")
 ```
 
-### Slide 12, state ward placement disposition risk assessments (with missingness plotted)
+### Slide 12, state ward placement disposition risk assessments (with missingness plotted), 2016-2020
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
 jj_placement_episode_count_disp_risk_placement_table <- jj_assessments_placement_legal_status_clean %>% 
@@ -114,7 +114,7 @@ ggplot(data = jj_placement_episode_count_disp_risk_placement_table_plot,
 
 <br><br>
 
-### Slide 12, state ward placement disposition risk assessments (with missingness not plotted)
+### Slide 12, state ward placement disposition risk assessments (with missingness not plotted), 2016-2020
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ### total unique placement episodes (year is year that placement episode starts; many placements in 2015-2020 started prior to 2015)
 jj_placement_episode_count_disp_risk_placement_table <- jj_assessments_placement_legal_status_clean %>% 
@@ -199,7 +199,7 @@ ggplot(data = jj_placement_episode_count_disp_risk_placement_table_plot,
 
 <br><br>
 
-### Slide 13, Unique placements episodes per 10k youth by county (state and dual wards included in rate)
+### Slide 13, Unique placements episodes per 10k youth by county (state and dual wards included in rate), 2015-2020 (fix quantiles)
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
 df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
@@ -208,13 +208,19 @@ df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\aby
 
 ### create overall file for denominator in % calculation below
 jj_placement_episode_county <- jj_assessments_placement_legal_status_clean %>% 
-  filter(!is.na(county_name)==TRUE) %>% 
+  filter(!is.na(county_name)==TRUE,
+         placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020),
+         placement_episode_does_count==1) %>% 
   distinct(person_id,placement_episode_segment,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
-  group_by(county_name) %>% 
-  summarize(placement_episode_count = n_distinct(placement_episode_unique_id[placement_episode_start_year%in%c(2015,2016,2017,2018,2019,2020) & placement_episode_does_count==1])) %>% 
+  group_by(county_name,placement_episode_start_year) %>% 
+  summarize(placement_episode_count = n_distinct(placement_episode_unique_id)) %>% 
   ungroup() %>% 
+  group_by(county_name) %>%
+  summarize(placement_episode_mean = mean(placement_episode_count,na.rm=TRUE)) %>%
+  ungroup() %>%
+  
   left_join(df_ezapop_race_ethnicity_10_17_county_level, by = "county_name") %>% 
-  mutate(placements_per_10k_youth = round(placement_episode_count/overall_10_17_population*10000, digits = 1))
+  mutate(placements_per_10k_youth = round(placement_episode_mean/overall_10_17_population*10000, digits = 1))
 
 ### create quantiles object
 no_classes <- 4
@@ -226,7 +232,7 @@ quantiles <- jj_placement_episode_county %>%
   as.vector() 
 
 ### make labels youth pop
-label_place_rate <- c("44 to 220","22 to 44","8 to 22", "0 to 8")
+label_place_rate <- c("44 to 220","","", "")
 
 ### create a new variable with the specified quantiles
 jj_placement_episode_county %<>%
@@ -265,8 +271,10 @@ ggplot(data = jj_placement_episode_county,
 
 <br><br>
 
-### Other option for slide 13, Unique placements episodes per 10k youth by county (state wards only)
-```{r echo=FALSE,message=FALSE,warning=FALSE}
+
+```{r eval=FALSE,echo=FALSE,message=FALSE,warning=FALSE}
+### Other option for slide 13, Unique placements episodes per 10k youth by county (state wards only), 2015-2020
+
 ### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
 df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
   mutate(county_name =  gsub(" County", "", county_name)) %>% 
@@ -330,30 +338,192 @@ ggplot(data = jj_placement_episode_county,
   guides(fill = guide_legend(reverse = FALSE)) 
 ```
 
+
+```{r include=FALSE, warning=FALSE, message=FALSE}
+# ### Slide 19, Detention, CCI, and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added together within episode; e.g. total detention LOS for one placement episode may add the LOS for several unique detention placements), 2015-2018
+# 
+# Note: Placement episodes with only in home and/or detention/jail placements are excluded 
+# 
+# ### create grouped los bins
+# jj_assessments_placement_legal_status_clean %<>%
+#   # group_by(placement_episode_unique_id) %>% 
+#   # mutate(los_overall_cci_only_grouped = sum(los_overall_cci_only, na.rm = TRUE)) %>% 
+#   # ungroup() %>% 
+#   mutate(los_overall_cci_only_grouped_bin = case_when(
+#     los_overall_cci_only<32 & los_overall_cci_only!=0 ~ 1,
+#     los_overall_cci_only>=32 & los_overall_cci_only<91 ~ 2,
+#     los_overall_cci_only>=91 & los_overall_cci_only<181 ~ 3,
+#     los_overall_cci_only>=181 & los_overall_cci_only<=365 ~ 4, 
+#     los_overall_cci_only>=365 & los_overall_cci_only<=730 ~ 5, 
+#     los_overall_cci_only>730 ~ 6, 
+#     TRUE ~ as.numeric(NA)),
+#     los_overall_cci_only_grouped_bin = factor(los_overall_cci_only_grouped_bin,
+#          levels = c(1,2,3,4,5,6),
+#          labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+# 
+# jj_assessments_placement_legal_status_clean %<>%
+#   # group_by(placement_episode_unique_id) %>% 
+#   # mutate(los_overall_mdhhs_only_grouped = sum(los_overall_mdhhs_only, na.rm = TRUE)) %>% 
+#   # ungroup() %>% 
+#   mutate(los_overall_mdhhs_only_grouped_bin = case_when(
+#     los_overall_mdhhs_only<32 & los_overall_mdhhs_only!=0 ~ 1,
+#     los_overall_mdhhs_only>=32 & los_overall_mdhhs_only<91 ~ 2,
+#     los_overall_mdhhs_only>=91 & los_overall_mdhhs_only<181 ~ 3,
+#     los_overall_mdhhs_only>=181 & los_overall_mdhhs_only<=365 ~ 4, 
+#     los_overall_mdhhs_only>=365 & los_overall_mdhhs_only<=730 ~ 5, 
+#     los_overall_mdhhs_only>730 ~ 6, 
+#     TRUE ~ as.numeric(NA)),
+#     los_overall_mdhhs_only_grouped_bin = factor(los_overall_mdhhs_only_grouped_bin,
+#          levels = c(1,2,3,4,5,6),
+#          labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+# 
+# jj_assessments_placement_legal_status_clean %<>%
+#   # group_by(placement_episode_unique_id) %>% 
+#   # mutate(los_overall_detention_only_grouped = sum(los_overall_detention_only, na.rm = TRUE)) %>% 
+#   # ungroup() %>% 
+#   mutate(los_overall_detention_only_grouped_bin = case_when(
+#     los_overall_detention_only<32 & los_overall_detention_only!=0 ~ 1,
+#     los_overall_detention_only>=32 & los_overall_detention_only<91 ~ 2,
+#     los_overall_detention_only>=91 & los_overall_detention_only<181 ~ 3,
+#     los_overall_detention_only>=181 & los_overall_detention_only<=365 ~ 4, 
+#     los_overall_detention_only>=365 & los_overall_detention_only<=730 ~ 5, 
+#     los_overall_detention_only>730 ~ 6, 
+#     TRUE ~ as.numeric(NA)),
+#     los_overall_detention_only_grouped_bin = factor(los_overall_detention_only_grouped_bin,
+#          levels = c(1,2,3,4,5,6),
+#          labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+# 
+# ### CCI
+# cci_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+#     filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+#          placement_episode_does_count==1,
+#          placement_episode_no==1,
+#          !is.na(los_overall_cci_only_grouped_bin)==TRUE) %>% 
+#   summarise(n_count = n_distinct(placement_unique_id))
+# 
+# cci_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+#     filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+#          placement_episode_does_count==1,
+#          placement_episode_no==1,
+#          !is.na(los_overall_cci_only_grouped_bin)) %>% 
+#     group_by(los_overall_cci_only_grouped_bin) %>% 
+#   summarise(n_count = round(n_distinct(placement_unique_id)/(cci_los_overall_denom$n_count), digits = 2))
+# 
+# ## use gather for line plot
+# cci_los_overall_table <- cci_los_overall_grouped %>%
+#   gather(year, value, `n_count`) %>% 
+#   dplyr::rename(los_bins = los_overall_cci_only_grouped_bin) %>% 
+#   mutate(facility = 'CCI')
+# 
+# ### MDHHS
+# mdhhs_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+#     filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+#          placement_episode_does_count==1,
+#          placement_episode_no==1,
+#          !is.na(los_overall_mdhhs_only_grouped_bin)==TRUE) %>% 
+#   summarise(n_count = n_distinct(placement_unique_id))
+# 
+# mdhhs_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+#     filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+#          placement_episode_does_count==1,
+#          placement_episode_no==1,
+#          !is.na(los_overall_mdhhs_only_grouped_bin)) %>% 
+#     group_by(los_overall_mdhhs_only_grouped_bin) %>% 
+#   summarise(n_count = round(n_distinct(placement_unique_id)/(mdhhs_los_overall_denom$n_count), digits = 2))
+# 
+# ## use gather for line plot
+# mdhhs_los_overall_table <- mdhhs_los_overall_grouped %>%
+#   gather(year, value, `n_count`) %>% 
+#   dplyr::rename(los_bins = los_overall_mdhhs_only_grouped_bin) %>% 
+#   mutate(facility = 'MDHHS')
+# 
+# ### Detention
+# detention_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+#     filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+#          placement_episode_does_count==1,
+#          placement_episode_no==1,
+#          !is.na(los_overall_detention_only_grouped_bin)==TRUE) %>% 
+#   summarise(n_count = n_distinct(placement_unique_id))
+# 
+# detention_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+#     filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+#          placement_episode_does_count==1,
+#          placement_episode_no==1,
+#          !is.na(los_overall_detention_only_grouped_bin)) %>% 
+#     group_by(los_overall_detention_only_grouped_bin) %>% 
+#   summarise(n_count = round(n_distinct(placement_unique_id)/(detention_los_overall_denom$n_count), digits = 2))
+# 
+# ## use gather for line plot
+# detention_los_overall_table <- detention_los_overall_grouped %>%
+#   gather(year, value, `n_count`) %>% 
+#   dplyr::rename(los_bins = los_overall_detention_only_grouped_bin) %>% 
+#   mutate(facility = 'Detention')
+# 
+# mdhhs_los_overall_table_missing_row <- tribble(
+#   ~`los_bins`,   ~`year`, ~`value`,    ~`facility`,                 
+#   "Less than 1 Month", "n_count",as.numeric(0.00), "MDHHS") 
+# 
+# ## combine
+# combined_los_overall_table <- rbind(cci_los_overall_table,mdhhs_los_overall_table,detention_los_overall_table,mdhhs_los_overall_table_missing_row) %>% 
+#   mutate(facility = factor(facility,
+#          levels = c("Detention","MDHHS", "CCI")))
+#   
+# ggplot(data = combined_los_overall_table,
+#             mapping = aes(x = los_bins, y = value, fill = forcats::fct_rev(facility))) + 
+#   geom_bar(position = "dodge", stat = "identity") +
+#   scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
+#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+#                                            max(.7))) +
+#   scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+#     theme(strip.text.x = element_text(face = "bold"),
+#           legend.position = "top",) +
+#     labs(y = NULL, x = NULL,
+#       caption = NULL,
+#       title = NULL,
+#       subtitle = NULL,
+#       fill = NULL) +
+#     coord_flip() +
+#   guides(fill = guide_legend(reverse = TRUE)) + 
+#   geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(facility)),
+#                   position = position_dodge(width = .9),
+#                   direction = 'x',
+#                   hjust = 0.75,
+#                   label.padding = 0.05,
+#                   box.padding = 0.05,
+#                   fill = "white",
+#                   color = c("#007392","#007392","#007392","#007392","#007392","#007392",
+#                             "#0db4e4","#0db4e4","#0db4e4","#0db4e4","#0db4e4","#9ed4ef",
+#                             "#9ed4ef","#9ed4ef","#9ed4ef","#9ed4ef","#9ed4ef","#0db4e4"),
+#                   segment.color = NA,
+#                   fontface = "bold",
+#                   na.rm = TRUE,
+#                   show.legend = FALSE)
+
+```
+
 <br><br>
 
+### Slide 19 (now only five catetogies b/c of color pallete size; need to fix label color here)
 
-### Slide 19, Detention, CCI, and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added together within episode; e.g. total detention LOS for one placement episode may add the LOS for several unique detention placements)
+Detention, CCI, and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added together within episode; e.g. total detention LOS for one placement episode may add the LOS for several unique detention placements), 2015-2018
 
 Note: Placement episodes with only in home and/or detention/jail placements are excluded 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
-
-### create grouped los bins
+### create grouped new los bins -- only five categories for this visual
 jj_assessments_placement_legal_status_clean %<>%
   # group_by(placement_episode_unique_id) %>% 
   # mutate(los_overall_cci_only_grouped = sum(los_overall_cci_only, na.rm = TRUE)) %>% 
   # ungroup() %>% 
   mutate(los_overall_cci_only_grouped_bin = case_when(
     los_overall_cci_only<32 & los_overall_cci_only!=0 ~ 1,
-    los_overall_cci_only>=32 & los_overall_cci_only<91 ~ 2,
-    los_overall_cci_only>=91 & los_overall_cci_only<181 ~ 3,
-    los_overall_cci_only>=181 & los_overall_cci_only<=365 ~ 4, 
-    los_overall_cci_only>=365 & los_overall_cci_only<=730 ~ 5, 
-    los_overall_cci_only>730 ~ 6, 
+    los_overall_cci_only>=32 & los_overall_cci_only<181 ~ 2,
+    los_overall_cci_only>=181 & los_overall_cci_only<=365 ~ 3, 
+    los_overall_cci_only>=365 & los_overall_cci_only<=730 ~ 4, 
+    los_overall_cci_only>730 ~ 5, 
     TRUE ~ as.numeric(NA)),
     los_overall_cci_only_grouped_bin = factor(los_overall_cci_only_grouped_bin,
-         levels = c(1,2,3,4,5,6),
-         labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 1 Month", "1 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
 
 jj_assessments_placement_legal_status_clean %<>%
   # group_by(placement_episode_unique_id) %>% 
@@ -361,15 +531,14 @@ jj_assessments_placement_legal_status_clean %<>%
   # ungroup() %>% 
   mutate(los_overall_mdhhs_only_grouped_bin = case_when(
     los_overall_mdhhs_only<32 & los_overall_mdhhs_only!=0 ~ 1,
-    los_overall_mdhhs_only>=32 & los_overall_mdhhs_only<91 ~ 2,
-    los_overall_mdhhs_only>=91 & los_overall_mdhhs_only<181 ~ 3,
-    los_overall_mdhhs_only>=181 & los_overall_mdhhs_only<=365 ~ 4, 
-    los_overall_mdhhs_only>=365 & los_overall_mdhhs_only<=730 ~ 5, 
-    los_overall_mdhhs_only>730 ~ 6, 
+    los_overall_mdhhs_only>=32 & los_overall_mdhhs_only<181 ~ 2,
+    los_overall_mdhhs_only>=181 & los_overall_mdhhs_only<=365 ~ 3, 
+    los_overall_mdhhs_only>=365 & los_overall_mdhhs_only<=730 ~ 4, 
+    los_overall_mdhhs_only>730 ~ 5, 
     TRUE ~ as.numeric(NA)),
     los_overall_mdhhs_only_grouped_bin = factor(los_overall_mdhhs_only_grouped_bin,
-         levels = c(1,2,3,4,5,6),
-         labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 1 Month", "1 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
 
 jj_assessments_placement_legal_status_clean %<>%
   # group_by(placement_episode_unique_id) %>% 
@@ -377,15 +546,14 @@ jj_assessments_placement_legal_status_clean %<>%
   # ungroup() %>% 
   mutate(los_overall_detention_only_grouped_bin = case_when(
     los_overall_detention_only<32 & los_overall_detention_only!=0 ~ 1,
-    los_overall_detention_only>=32 & los_overall_detention_only<91 ~ 2,
-    los_overall_detention_only>=91 & los_overall_detention_only<181 ~ 3,
-    los_overall_detention_only>=181 & los_overall_detention_only<=365 ~ 4, 
-    los_overall_detention_only>=365 & los_overall_detention_only<=730 ~ 5, 
-    los_overall_detention_only>730 ~ 6, 
+    los_overall_detention_only>=32 & los_overall_detention_only<181 ~ 2,
+    los_overall_detention_only>=181 & los_overall_detention_only<=365 ~ 3, 
+    los_overall_detention_only>=365 & los_overall_detention_only<=730 ~ 4, 
+    los_overall_detention_only>730 ~ 5, 
     TRUE ~ as.numeric(NA)),
     los_overall_detention_only_grouped_bin = factor(los_overall_detention_only_grouped_bin,
-         levels = c(1,2,3,4,5,6),
-         labels = c("Less than 1 Month", "1 to 3 Months", "3 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 1 Month", "1 to 6 Months","6 to 12 Months","12 to 24 Months","24 Months+"))) ### use factor function to assign labels to values
 
 ### CCI
 cci_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
@@ -463,9 +631,9 @@ combined_los_overall_table <- rbind(cci_los_overall_table,mdhhs_los_overall_tabl
          levels = c("Detention","MDHHS", "CCI")))
   
 ggplot(data = combined_los_overall_table,
-            mapping = aes(x = los_bins, y = value, fill = forcats::fct_rev(facility))) + 
+            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
   geom_bar(position = "dodge", stat = "identity") +
-  scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
                                            max(.7))) +
   scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
@@ -478,22 +646,19 @@ ggplot(data = combined_los_overall_table,
       fill = NULL) +
     coord_flip() +
   guides(fill = guide_legend(reverse = TRUE)) + 
-  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(facility)),
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
                   position = position_dodge(width = .9),
                   direction = 'x',
                   hjust = 0.75,
-                  label.padding = 0.05,
-                  box.padding = 0.05,
+                  label.padding = 0.1,
+                  box.padding = 0.1,
                   fill = "white",
-                  color = c("#007392","#007392","#007392","#007392","#007392","#007392",
-                            "#0db4e4","#0db4e4","#0db4e4","#0db4e4","#0db4e4","#9ed4ef",
-                            "#9ed4ef","#9ed4ef","#9ed4ef","#9ed4ef","#9ed4ef","#0db4e4"),
+                  color = "gray40",
                   segment.color = NA,
                   fontface = "bold",
                   na.rm = TRUE,
                   show.legend = FALSE)
 
-# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Output\\Visuals\\Detention\\Images\\detention_pre_post_los_overall_plot_year_2019_10.png", detention_pre_post_los_overall_plot_year_2019, width = 8, height = 6)
 ```
 
 <br><br>
@@ -687,7 +852,7 @@ ggplot(data = jj_legal_status_placements_per_episode, aes(y = percent, x = legal
 
 <br><br>
 
-### Slide 32, prior history of mdhhs placement
+### Slide 32, prior history of mdhhs placement, 2015-2020
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ### create placements per episode bins
 jj_assessments_placement_legal_status_clean %<>%
@@ -758,7 +923,7 @@ ggplot(data = jj_placement_episode_history_table,
 
 <br><br>
 
-### Slide 37, RRI disparities, placement episode disparities
+### Slide 37, RRI disparities, placement episode disparities, 2015-2020
 
 NOTE: I have not included American Indian youth in the visual because of their small sample size (N=68 across 5 years) and huge RRI (around 7 times as likely as White youth to be placed by MDHHS). I think we landed on noting this apparent disparity in text/out loud during the presentation but not using the specific number since we are concerned about drawing too precise of a quantitative conclusion from such a small cohort of youth
 
@@ -895,7 +1060,7 @@ ggplot(data = jj_placement_race_ethnicity_rri_plot, aes(y = rri, x = rri_measure
 
 <br><br>
 
-### Additional Visual: LOS disparities -- CCI/MDHHS disparities not statistically significant, but detention is for Black and White youth
+### Additional Visual: LOS disparities -- CCI/MDHHS disparities not statistically significant, but detention is for Black and White youth, 2015-2018
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### disable scientific notation
 options(scipen=999)

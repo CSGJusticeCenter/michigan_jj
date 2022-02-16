@@ -5,120 +5,12 @@ date: "2/8/2022"
 output: html_document
 ---
 
+# {.tabset .tabset-fade .tabset-pills}
 ```{r include=FALSE}
 ### call libraries
 library(easypackages)
 libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
 ````
-
-# {.tabset .tabset-fade .tabset-pills}
-```{r include=FALSE}
-## 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
-
-# set sharepoint path using csgjcr::csg_sp_path function
-sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
-
-# import cases
-tcs_cases <- read_xlsx(
-  file.path(
-    sharepoint_tcs_data_path, "TCS_Cases_A.xlsx"),
-  .name_repair = make_clean_names
-  ) %>%
-  mutate(across(where(is.POSIXct), as.Date))
-
-# import charges
-tcs_charges <- read_xlsx(
-  file.path(
-    sharepoint_tcs_data_path, "TCS_Charges_A.xlsx"),
-  .name_repair = make_clean_names
-  ) %>%
-  mutate(across(where(is.POSIXct), as.Date))
-
-# import dispositions
-tcs_dispositions <- read_xlsx(
-  file.path(
-    sharepoint_tcs_data_path, "TCS_DispositionsPerCharge_A.xlsx"),
-  .name_repair = make_clean_names
-  ) %>%
-  mutate(across(where(is.POSIXct), as.Date))
-
-# # import sentencing -- this is "Sentencing results on adult criminal FJ and DJ sentencings."
-# tcs_sentencing <- read_xlsx(
-#   file.path(
-#     csg_path, "TCS_Sentencings_A.xlsx"),
-#   .name_repair = make_clean_names
-#   ) %>%
-#   mutate(across(where(is.POSIXct), as.Date))
-
-# import placements
-tcs_placements <- read_xlsx(
-  file.path(
-    sharepoint_tcs_data_path, "TCS_Placements_A.xlsx"),
-  .name_repair = make_clean_names
-  ) %>%
-  mutate(across(where(is.POSIXct), as.Date))
-
-```
-
-```{r include=FALSE}
-## 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
-
-# * `juvenile_nbr` (unique individual ID) and `case_number` (unique case ID, though not sure of "case" definition) appear to be main primary key across files, but will need to use dates at the very least to create pre- and post- disposition/adjudication distinctions in placement data *
-# 
-# * maybe also use `jurist_nbr` ("The professional number associated to the Judge assigned to the case."), either `case_year` or `year`, `tc_sreport_court_jcl` ("AS400 caseload report court code."),
-# 
-# **seemingly important dates:**
-# 
-# * offense_dt
-# * case_file_dt
-# * adjudication_dt
-# * arraignment_dt
-# * disposition
-# * case_reopen_dt
-# * case_closed_dt
-
-
-# de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
-tcs_cases_de_dup <- tcs_cases %>%
-  filter(!is.na(juvenile_nbr)==TRUE,
-         juvenile_nbr!=0, ### there are a handful of records where juvenile_nbr=0; appears to be data error as the records don't consistently share other identifying info like dates and county
-         !is.na(case_number)==TRUE) %>% 
-  distinct(juvenile_nbr,case_number,offense_dt,.keep_all = TRUE)
-
-# de-dup charges file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped
-
-# issue: there are 1,288 records in the cases df that do not appear at all in the charges df; further there is no juvenile_nbr in the charges data which is concerning for the merge b/c i have seen instances where one case_number has two different juvenile_nbr's attached to it; not sure if we can use these data
-tcs_charges_de_dup <- tcs_charges %>% 
-    filter(!is.na(case_id)==TRUE,
-         !is.na(id)==TRUE) %>% 
-  dplyr::rename(case_number = case_id) %>% 
-  distinct(id,case_number,.keep_all = TRUE) %>% 
-  mutate(current_charge_classification_clean = ifelse(str_starts(current_offense,"712A"),"Status",current_offense_classification))
-
-
-# de-dup dispositions file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped -- will have to further de-dup by disposition later
-
-# looks like there are some pure dups
-tcs_dispositions_de_dup <- tcs_dispositions %>% 
-    filter(!is.na(case_id)==TRUE,
-         !is.na(name_nbr)==TRUE) %>% 
-  dplyr::rename(case_number = case_id,
-                juvenile_nbr= name_nbr) %>% 
-  distinct(juvenile_nbr,case_number,charge_count,charge_count,id,dispo_dt,event_nbr,.keep_all = TRUE) %>% 
-  mutate(id = as.character(id))
-  
-
-# de-dup placements file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped 
-
-# looks like there are some pure dups
-tcs_placements_de_dup <- tcs_placements %>% 
-    filter(!is.na(case_id)==TRUE,
-         !is.na(name_nbr)==TRUE) %>% 
-  dplyr::rename(case_number = case_id,
-                juvenile_nbr= name_nbr) %>% 
-  distinct(juvenile_nbr,case_number,place_begin_date,.keep_all = TRUE) %>% 
-  mutate(unique_placement_id = paste0(juvenile_nbr,case_number,place_begin_date))
-```
 
 ## Analysis Outline
 
@@ -164,6 +56,794 @@ tcs_placements_de_dup <- tcs_placements %>%
 
 <br><br>
 
+## Analysis for 2/15 
+
+<br>
+
+### 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
+```{r message=FALSE,warning=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
+
+### import cases
+tcs_cases <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Cases_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import charges
+tcs_charges <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Charges_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import dispositions
+tcs_dispositions <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_DispositionsPerCharge_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import placements
+tcs_placements <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Placements_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import mandatory events (to explore legal status)
+tcs_mandatory_events <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_MandatoryEvents_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+```
+
+<br><br>
+
+### 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
+
+
+From Laura, Tanya, and Susan Svoboda:
+
+For TCS, all data sets may be linked with CourtType, Year, TCSReportCourtJCL, CaseYear, CaseID and CaseType.
+
+Juvenile/Name Number is available on the following data sets:
+Cases – JuvenileNbr identifies the juvenile for the TCSreportCourtname.  Some of the FJ casetypes do not have a JuvenileNbr because a juvenile record is not created in adult cases.  In adult cases(in this data set only FJ), if the case had a prior juvenile record the JuvenileNbr will be populated indicated a reoffending juvenile in adult court.
+
+Charges – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case.
+
+MandatoryEvents –   NameNbr identifies the juvenile; 1 to many mandatory events will relate to a case.  Key events, legal status set, adjudication, disposition events etc.
+
+Placements - NameNbr identifies the juvenile; 0 to many placement events will relate to a case.  Would recommend using the PCN events and not use ORD.  Courts should be using PCN events.
+Financials –   PayorPatyNameNbr identifies the payor party.  This may or may not be the juvenile; 0 to many financial records will relate to a case.  Link to cases and use Juvenile Nbr, if needed.
+Program Results – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 0 to many program results can relate to a case.
+Sentencing – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed.
+
+
+Other notes from Josh M:
+
+•	Missing charge classification for 8.5% of all records in charge data file – clarification on reason
+o	Data entry error or city ordinance –
+o	Look up Michigan state code –
+o	Look at codes with classification and compare to codes without classification
+o	By case type – clue b/c it reflects highest charge (fj = felony, dl = not felony juvenile)
+•	Coding placement types (see attached Excel for remaining coding questions)
+o	Use facility code/rate with public list of facility codes (not all courts use financial data)
+
+
+•	Clarification on  “Would recommend using the PCN events and not use ORD.  Courts should be using PCN events.” – what is the distinction between the two?
+o	ORD – ordered to transport -- temporary
+o	PCN – placement change notice
+
+
+**seemingly important dates:**
+
+* offense_dt
+* case_file_dt
+* adjudication_dt
+* arraignment_dt
+* disposition
+* case_reopen_dt
+* case_closed_dt
+
+<br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### cases
+######################################
+
+# de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
+tcs_cases_de_dup <- tcs_cases %>%
+  filter(!is.na(juvenile_nbr)==TRUE,
+         juvenile_nbr!=0, ### there are a handful of records where juvenile_nbr=0; appears to be data error as the records don't consistently share other identifying info like dates and county
+         !is.na(case_number)==TRUE) %>% 
+  dplyr::rename(case_id = case_number) %>%  ### there are a number of important primary keys which have different names across the files -- here case_id and case_number are the same ID (naming all 'case_id')
+  distinct(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,.keep_all = TRUE) %>% 
+  mutate(year = as.numeric(year),
+         case_year = as.numeric(year))
+
+### 99% of dropped cases are due to 'caseload_action' -- multiple entries as different stages of case are entered 
+```
+
+<br><br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### charges
+######################################
+
+# de-dup charges file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped
+# note: there are 1,288 records in the cases df that do not appear at all in the charges df; note from Laura and team: "no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case."
+# case_number identifies case and id uniquely identifies charge within case  
+tcs_charges_de_dup <- tcs_charges %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(id)==TRUE) %>% 
+  dplyr::rename(case_number = case_id) %>% 
+  distinct(id,case_number,.keep_all = TRUE) %>% 
+  mutate(current_charge_classification_clean = ifelse(str_starts(current_offense,"712A"),"Status",current_offense_classification)) ### recode status offense (from laura's team: "If you filter on CurrentOffense by 712A – that should give you the status offenses.")
+```
+
+<br><br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### dispositions
+######################################
+
+# de-dup dispositions file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped -- will have to further de-dup by disposition later
+
+# dropped records are due to each offense having its own disposition row per case per offense/charge (id)
+# adding 'id' results in no rows being dropped
+tcs_dispositions_de_dup <- tcs_dispositions %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(name_nbr)==TRUE) %>% 
+  dplyr::rename(juvenile_nbr= name_nbr) %>% ### there are a number of important primary keys which have different names across the files -- here name_nbr and juvenile_nbr are the same ID (naming all 'juvenile_nbr')
+  distinct(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,.keep_all = TRUE) %>% 
+  mutate(id = as.character(id))
+```
+
+<br><br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### placements
+######################################
+
+# de-dup placements file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped 
+# looks like there are some pure dups
+tcs_placements_de_dup <- tcs_placements %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(name_nbr)==TRUE,
+         order_type=="PCN") %>% ### from laura and team: "Would recommend using the PCN events and not use ORD ("ordered to transport"/temporary record).  Courts should be using PCN ("placement change notice") events."
+  dplyr::rename(juvenile_nbr= name_nbr) %>% ### there are a number of important primary keys which have different names across the files -- here name_nbr and juvenile_nbr are the same ID (naming all 'juvenile_nbr')
+  distinct(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,place_begin_date,place_type,.keep_all = TRUE) %>% ### 54 dups (can further de-dup by keeping placement with longer los when dates match)
+  mutate(unique_placement_id = paste0(juvenile_nbr,case_id,place_begin_date,place_type,place_end_date),
+         unique_case_id = paste0(juvenile_nbr,case_id,case_year,case_type),
+         unique_youth_id = paste0(court_type,year,tc_sreport_court_jcl,juvenile_nbr),
+         year = as.numeric(year),
+         case_year = as.numeric(year)) %>% 
+  ungroup()
+```
+
+<br><br>
+
+### 3. Start Cleaning w/ Placements (this will serve as base file -- as we interested only in those for whom there is placement data)
+
+Here are our groupings for placement type:
+```{r message=FALSE,warning=FALSE}
+placement_detention <- c("Calhoun County Juvenile Home","DETENTION","I-Child Vill Det (Not VC Disp)","NON-SECURE DETENTION","OTHER COUNTY DETENTION","Regional Detention Center","SECURE DETENTION")
+
+placement_residential_non_mdhhs <- c("I-Boot Camp","I-CFY Ranch","I-Child Vill Residential","I-Child Vill Secure","I-Private Placement","Independent Placement","INSTITUTIONAL/RESIDENTIAL CARE","PRIVATE AGENCY/INSTITUTION","RESIDENTIAL PLACEMENT","CALHOUN TREATMENT CENTER","Residential Treatment Program")
+
+placement_in_home_aftercare <- c("Aftercare/CV","Bond w/Father","Bond w/Mother","Boot Camp Aftercare","CFY Independent Living","Consent Probation/Father","Consent Probation/Mother","Consent Probation/Other","Consent Probation/Parents","Crossroads For Youth Aftercare","CUS","F01","Father","GDN","Guardian","Home of Guardian-Crt Supervsn","Home of Guardian-DHS Sprv.","Home of Guardian-FIA Supervsn","Home of Parent-Crt Supervision","Home of Parent-DHS Supervision","Home of Parent-FIA Supervision","Home of Parent-No Supervision","Home of parent CRT Supervision","Home of Relative-CRT Supervisi","HOME OF RELATIVE-CRT SUPERVSN","Home of Relative-FIA Supervisi","Home of Relative-FIA Supervsn","I-Child Vill Fam Based Reentry","I-Custodian","Intensive Probation/Father","Intensive Probation/Mother","Intensive Probation/Other","Intensive Probation/Parents","Intensive Reentry Parents","Intensive Reentry Program","Intensive Reentry/Father","Intensive Reentry/Mother","Intensive Reentry/Other","M01","Own Home (Both Parents)","Own Home/Father","Own Home/Mother","PARENTS","PLACED WITH PARENT-CRT SPRV","PLACED WITH PARENT-DHS SPRV","PLACED WITH RELATIVE-CRT SPRV","Probation/Father","Bond w/Parent", "Probation/Mother","Probation/Other","Probation/Parents","PTS","REL","Relative","Relative Placement","Unrelated Unlicensed Home","CFY Day Stud","CFY Work Ed Day St")
+
+placement_mdhhs <- c("DEPARTMENT OF HUMAN SERVICES","DSS","Family Independence Agency","I-Department of Human Services","I-DHHS-150/Del")
+
+placement_awol <- c("Absent without Leave","Order Take Into Custody")
+
+placement_jail <- c("I-Oakland County Jail","Jail")
+
+placement_foster_shelter <- c("Foster Care-Court Supervision","Foster Care-FIA Supervision","PLACED IN FOSTER CARE-DHS SPRV","PLACED IN FOSTER CARE-CRT SPRV","Shelter Home")
+```
+
+<br><br>
+
+Create clean placement categories 
+```{r message=FALSE,warning=FALSE}
+tcs_placements_de_dup %<>%
+  mutate(place_type_clean = 
+           case_when(
+             place_type_desc %in% placement_detention ~ 1,
+             place_type_desc %in% placement_residential_non_mdhhs ~ 2,
+             place_type_desc %in% placement_mdhhs ~ 3,
+             place_type_desc %in% placement_jail ~ 4,
+             place_type_desc %in% placement_awol ~ 5,
+             place_type_desc %in% placement_in_home_aftercare ~ 6,
+             place_type_desc %in% placement_foster_shelter ~ 7,
+             TRUE ~ as.numeric(NA)),
+         place_type_clean = factor(place_type_clean,
+         levels = c(1,2,3,4,5,6,7),
+         labels = c("Detention","Residential","MDHHS","Jail","AWOL","In Home/Aftercare","Foster Care/Shelter Home"))) %>% ### use factor function to assign labels to values
+  ungroup()
+```
+
+<br><br>
+
+### Individual Placements: Counts and Percentages, 2016-2020
+```{r warning=FALSE, message=FALSE}
+tcs_placements_de_dup_ind_place_denom <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(place_type_clean)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  summarise(`Sample N` = n_distinct(unique_placement_id)) 
+
+tcs_placements_de_dup_ind_place_grouped <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(place_type_clean)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  distinct(unique_placement_id, .keep_all=TRUE) %>% 
+  group_by(place_type_clean) %>% 
+  summarise(`Sample N` = n_distinct(unique_placement_id), 
+            `Sample %` = round(n_distinct(unique_placement_id)/tcs_placements_de_dup_ind_place_denom$`Sample N`*100, digits = 1)) %>% 
+  ungroup()
+
+# ### overall -- not grouped -- for table
+# tcs_placements_de_dup_median_ind_place_overall <- tcs_placements_de_dup %>% 
+#   filter(case_year%in%c(2016,2017,2018,2019),
+#          !is.na(place_type_clean)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+#   summarise(`Median Length of Stay, Sample N` = n_distinct(unique_case_id[!is.na(los_case_overall_all_included)==TRUE]), 
+#             `Median Length of Stay, Days` = round(median(los_case_overall_all_included, na.rm = TRUE), digits = 0)) %>% 
+#   mutate(place_type_clean="Overall")
+# 
+# tcs_placements_de_dup_median_ind_place_table <- rbind(tcs_placements_de_dup_median_ind_place,tcs_placements_de_dup_median_ind_place_overall)
+
+### print table via kableextra
+kable(tcs_placements_de_dup_ind_place_grouped, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+<br><br>
+
+Calculate length of stay and create LOS buckets (for possible calculation by individual placement and within case)
+```{r message=FALSE,warning=FALSE}
+### calculate length of stay in three different ways:
+# los with everything counted 
+# los split into placement type buckets -- making sure to recode '0' as NA so as to not bring down mean LOS when youth was never actually placed somewhere
+tcs_placements_de_dup %<>%
+  group_by(unique_case_id) %>% ### group by case
+  mutate(case_first_place_date = min(place_begin_date),
+         case_last_place_date = max(place_end_date)) %>%
+  ungroup() %>% 
+  mutate(unique_placement_los = time_length(difftime(place_end_date, place_begin_date), unit = 'days'),
+         los_unique_placement_detention_only = ifelse(place_type_clean=="Detention",unique_placement_los,NA),
+         los_unique_placement_residential_non_mdhhs_only = ifelse(place_type_clean=="Residential",unique_placement_los,NA),
+         los_unique_placement_mdhhs_only = ifelse(place_type_clean=="MDHHS",unique_placement_los,NA)) %>% 
+  group_by(unique_case_id) %>% 
+  mutate(los_case_overall_all_included = sum(unique_placement_los),
+         los_case_overall_all_included = ifelse(los_case_overall_all_included==0,NA,los_case_overall_all_included),
+         los_overall_detention_only = sum(los_unique_placement_detention_only),
+         los_overall_detention_only = ifelse(los_overall_detention_only==0,NA,los_overall_detention_only),
+         los_overall_residential_only = sum(los_unique_placement_residential_non_mdhhs_only),
+         los_overall_residential_only = ifelse(los_overall_residential_only==0,NA,los_overall_residential_only),
+         los_overall_mdhhs_only = sum(los_unique_placement_mdhhs_only),
+         los_overall_mdhhs_only = ifelse(los_overall_mdhhs_only==0,NA,los_overall_mdhhs_only)) %>% 
+  ungroup()
+
+### create grouped los bins for detention
+### mirror becky's approach with the kalamazoo analysis
+### recode LOS_placement (1/3=1 "1-3 days") (4/7=2 "4-7 days") (8/14=3 "8-14 days") (15/30=4 "15-30 days") (31/90=5 "1-3 months") (91/max=6 ">3 months"), gen (placement_buckets)
+tcs_placements_de_dup %<>%
+  mutate(los_unique_placement_detention_only_grouped_bin = case_when(
+    los_unique_placement_detention_only<3 & los_unique_placement_detention_only!=0 ~ 1,
+    los_unique_placement_detention_only>=3 & los_unique_placement_detention_only<7 ~ 2,
+    los_unique_placement_detention_only>=7 & los_unique_placement_detention_only<15 ~ 3,
+    los_unique_placement_detention_only>=15 & los_unique_placement_detention_only<=30 ~ 4,
+    los_unique_placement_detention_only>=30 & los_unique_placement_detention_only<=90 ~ 5,
+    los_unique_placement_detention_only>90 ~ 6,
+    TRUE ~ as.numeric(NA)),
+    los_unique_placement_detention_only_grouped_bin = factor(los_unique_placement_detention_only_grouped_bin,
+         levels = c(1,2,3,4,5,6),
+         labels = c("1 to 3 Days", "3 to 7 Days", "7 to 14 Days","15 to 30 Days","30 to 90 Days","90 Days+"))) ### use factor function to assign labels to values
+
+### create grouped los bins for residential placement
+tcs_placements_de_dup %<>%
+  mutate(los_unique_placement_residential_only_grouped_bin = case_when(
+    los_unique_placement_residential_non_mdhhs_only<32 & los_unique_placement_residential_non_mdhhs_only!=0 ~ 1,
+    los_unique_placement_residential_non_mdhhs_only>=32 & los_unique_placement_residential_non_mdhhs_only<92 ~ 2,
+    los_unique_placement_residential_non_mdhhs_only>=92 & los_unique_placement_residential_non_mdhhs_only<=275 ~ 3,
+    los_unique_placement_residential_non_mdhhs_only>=275 & los_unique_placement_residential_non_mdhhs_only<=549 ~ 4,
+    los_unique_placement_residential_non_mdhhs_only>549 ~ 5,
+    TRUE ~ as.numeric(NA)),
+    los_unique_placement_residential_only_grouped_bin = factor(los_unique_placement_residential_only_grouped_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
+
+### create grouped los bins for mdhhs placement
+tcs_placements_de_dup %<>%
+  mutate(los_unique_placement_mdhhs_only_grouped_bin = case_when(
+    los_unique_placement_mdhhs_only<32 & los_unique_placement_mdhhs_only!=0 ~ 1,
+    los_unique_placement_mdhhs_only>=32 & los_unique_placement_mdhhs_only<92 ~ 2,
+    los_unique_placement_mdhhs_only>=92 & los_unique_placement_mdhhs_only<=275 ~ 3,
+    los_unique_placement_mdhhs_only>=275 & los_unique_placement_mdhhs_only<=549 ~ 4,
+    los_unique_placement_mdhhs_only>549 ~ 5,
+    TRUE ~ as.numeric(NA)),
+    los_unique_placement_mdhhs_only_grouped_bin = factor(los_unique_placement_mdhhs_only_grouped_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
+```
+
+<br><br>
+
+### Median LOS -- Detention, Residential, and Treatment, 2016-2018 (individual placements)
+```{r warning=FALSE, message=FALSE}
+tcs_placements_de_dup_median_ind_place <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018),
+         !is.na(place_type_clean)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  distinct(unique_placement_id,.keep_all=TRUE) %>% 
+  group_by(place_type_clean) %>% 
+  summarise(`Median Length of Stay, Sample N` = n_distinct(unique_placement_id[!is.na(unique_placement_los)==TRUE]), 
+            `Median Length of Stay, Days` = round(median(unique_placement_los, na.rm = TRUE), digits = 0)) %>% 
+  ungroup()
+
+# ### overall -- not grouped -- for table
+# tcs_placements_de_dup_median_ind_place_overall <- tcs_placements_de_dup %>% 
+#   filter(case_year%in%c(2016,2017,2018,2019),
+#          !is.na(place_type_clean)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+#   summarise(`Median Length of Stay, Sample N` = n_distinct(unique_case_id[!is.na(los_case_overall_all_included)==TRUE]), 
+#             `Median Length of Stay, Days` = round(median(los_case_overall_all_included, na.rm = TRUE), digits = 0)) %>% 
+#   mutate(place_type_clean="Overall")
+# 
+# tcs_placements_de_dup_median_ind_place_table <- rbind(tcs_placements_de_dup_median_ind_place,tcs_placements_de_dup_median_ind_place_overall)
+
+### print table via kableextra
+kable(tcs_placements_de_dup_median_ind_place, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+<br><br>
+
+
+```{r eval=FALSE,include=FALSE,warning=FALSE, message=FALSE}
+### Median LOS -- Detention, Residential, and Treatment, 2016-2018 (grouped by case)
+tcs_placements_de_dup_median_case <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018)) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  # distinct(unique_case_id,.keep_all=TRUE) %>% 
+  summarize(`Median Length of Stay, Overall (Sample N)` = n_distinct(unique_case_id[!is.na(los_case_overall_all_included)==TRUE]), 
+            `Median Length of Stay, Overall (Days)` = round(median(los_case_overall_all_included, na.rm = TRUE), digits = 0),
+            `Median Length of Stay, Detention (Sample N)` = n_distinct(unique_case_id[!is.na(los_overall_detention_only)==TRUE]), 
+            `Median Length of Stay, Detention (Days)` = round(median(los_overall_detention_only, na.rm = TRUE), digits = 0),
+            `Median Length of Stay, Residential (Sample N)` = n_distinct(unique_case_id[!is.na(los_overall_residential_only)==TRUE]),
+            `Median Length of Stay, Residential (Days)` = round(median(los_overall_residential_only, na.rm = TRUE), digits = 0)) 
+
+### print table via kableextra
+kable(tcs_placements_de_dup_median_case, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+
+# ### use gather for plotting
+# jj_los_placement_episode_median %<>%
+#   gather(facility_type_measure, median, c(`Median Length of Stay, Overall (Days)`,`Median Length of Stay, Residential (Days)`,`Median Length of Stay, Treatment (Days)`)) %>% 
+#   mutate(facilty_type = ifelse(facility_type_measure=="Median Length of Stay, CCI Out-of-Home (Days)", "CCI Facility","MDHHS Facility"),
+#          sample_n = ifelse(facilty_type=="MDHHS Facility",`Median Length of Stay, MDHHS Out-of-Home (Sample N)`,`Median Length of Stay, CCI Out-of-Home (Sample N)`)) %>% 
+#   mutate(facilty_type_n = paste0(
+#       "<span style = 'font-size:16pt'>", facilty_type, "</span><br><br>",
+#       "<span style = 'font-size:12pt'><em>", "Placement Episodes (N): ", sample_n,"</em></span>"))
+
+    #      %>%
+    # mutate(rri_measure = factor(rri_measure,
+    #                             levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)")))
+
+### plot
+# ggplot(data = jj_los_placement_episode_median,
+#             mapping = aes(x = facilty_type_n, y = median, fill = facilty_type_n)) +
+#   geom_bar(stat = "identity") +
+#     scale_fill_manual(values = c("#007392","#007392")) +
+#     scale_y_continuous(limits=c(min(0), max(500))) +
+#     scale_x_discrete(labels = scales::wrap_format(15), limits = rev) +
+#     theme(strip.text.x = element_text(face = "bold"),
+#           axis.text.y = element_markdown()) +
+#     labs(y = NULL, x = NULL,
+#       caption = NULL,
+#       title = NULL,
+#       subtitle = NULL) +
+#     coord_flip() +
+#   guides(color = guide_legend(reverse = TRUE), fill = FALSE) + 
+#   geom_label_repel(aes(label = paste0(median," Days")),
+#                   direction = 'x',
+#                   hjust = 0.75,
+#                   label.padding = 0.5,
+#                   fill = "white",
+#                   color = "#007392",
+#                    box.padding = 0.25,
+#                   fontface = "bold",
+#                    na.rm = TRUE,
+#                    show.legend = FALSE)
+```
+
+```{r eval=FALSE,include=FALSE,warning=FALSE, message=FALSE}
+### Median LOS -- Detention, Residential, and Treatment, 2016-2018 (by unique youth)
+
+From Laura and team: unique youth can be determined by "CourtType, Year, TCSReportCourtJCL, JuvenileNbr – for the TCSreportCourtname."
+
+tcs_placements_de_dup_median_youth <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018)) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  distinct(unique_youth_id,.keep_all=TRUE) %>% 
+  summarize(`Median Length of Stay, Overall (Sample N)` = n_distinct(unique_youth_id[!is.na(los_case_overall_all_included)==TRUE]), 
+            `Median Length of Stay, Overall (Days)` = round(median(los_case_overall_all_included, na.rm = TRUE), digits = 0),
+            `Median Length of Stay, Detention (Sample N)` = n_distinct(unique_youth_id[!is.na(los_overall_detention_only)==TRUE]), 
+            `Median Length of Stay, Detention (Days)` = round(median(los_overall_detention_only, na.rm = TRUE), digits = 0),
+            `Median Length of Stay, Residential (Sample N)` = n_distinct(unique_youth_id[!is.na(los_overall_residential_only)==TRUE]),
+            `Median Length of Stay, Residential (Days)` = round(median(los_overall_residential_only, na.rm = TRUE), digits = 0),
+            `Median Length of Stay, Treatment (Sample N)` = n_distinct(unique_youth_id[!is.na(los_overall_treatment_only)==TRUE]),
+            `Median Length of Stay, Treatment (Days)` = round(median(los_overall_treatment_only, na.rm = TRUE), digits = 0)) 
+
+### print table via kableextra
+kable(tcs_placements_de_dup_median_youth, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+<br><br>
+
+### Detention LOS, Individual Placements, Bins (NOTE: PALETTE IS PLACEHOLDER)
+```{r warning=FALSE, message=FALSE}
+### set theme for now
+theme_set(theme_minimal())
+
+### detention
+detention_los_overall_denom <- tcs_placements_de_dup %>% 
+    filter(case_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_detention_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(unique_placement_id))
+
+detention_los_overall_grouped <- tcs_placements_de_dup %>% 
+    filter(case_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_detention_only_grouped_bin)) %>% 
+  group_by(los_unique_placement_detention_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(unique_placement_id)/(detention_los_overall_denom$n_count), digits = 2)) %>% 
+  ungroup() 
+
+### use gather for plot
+detention_los_overall_grouped_plot <- detention_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_unique_placement_detention_only_grouped_bin) %>% 
+  mutate(facility = 'Detention')
+
+### plot
+ggplot(data = detention_los_overall_grouped_plot,
+            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","blue","#0db4e4","#9ed4ef","#d4e9f8")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(.7))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          legend.position = "top",) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.25,
+                  box.padding = 0.25,
+                  fill = "white",
+                  color = "gray40",
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+```
+
+<br><br>
+
+### Residential Placement LOS, Individual Placements, Bins (NOTE: PALETTE IS PLACEHOLDER)
+```{r warning=FALSE, message=FALSE}
+### set theme for now
+theme_set(theme_minimal())
+
+### residential
+residential_los_overall_denom <- tcs_placements_de_dup %>% 
+    filter(case_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_residential_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(unique_placement_id))
+
+residential_los_overall_grouped <- tcs_placements_de_dup %>% 
+    filter(case_year%in%c(2016,2017,2018),
+         !is.na(los_unique_placement_residential_only_grouped_bin)) %>% 
+  group_by(los_unique_placement_residential_only_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(unique_placement_id)/(residential_los_overall_denom$n_count), digits = 2)) %>% 
+  ungroup() 
+
+### use gather for plot
+residential_los_overall_grouped_plot <- residential_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_unique_placement_residential_only_grouped_bin) %>% 
+  mutate(facility = 'Residential, Non-MDHHS')
+
+### plot
+ggplot(data = residential_los_overall_grouped_plot,
+            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
+                                           max(.7))) +
+  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          legend.position = "top",) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.25,
+                  box.padding = 0.25,
+                  fill = "white",
+                  color = "gray40",
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+
+```
+
+<br><br>
+
+### Clean race/ethnicity in `placements` and `cases` data frame
+
+From Laura and team:
+
+From TCS  
+•	AI-American Indian  
+•	BR-Bi-Racial 
+•	OT-Other  
+•	BA-Black American  
+•	OA-Oriental American  
+•	SA-Spanish American  
+•	WA-White American  
+•	A-Asian American  
+•	AF-African/American  
+•	AR-Arabic  
+•	C-Caucasian  
+•	H-Hispanic  
+•	CH-Chinese  
+•	K-Korean  
+•	MR-Multi-Racial  
+•	R-Russian  
+•	RO-Romanian  
+•	HI-Native Hawaiian  
+
+```{r warning=FALSE, message=FALSE}
+### placements
+tcs_placements_de_dup %<>%
+  mutate(race_csg_6 = case_when(
+    race %in% c("OA","A","CH","K","HI") ~ 1,
+    race %in% c("BA","AF") ~ 2,
+    race %in% c("SA","H") ~ 3,
+    race %in% c("WA","Caucasian","Russian","Romanian") ~ 4,
+    race %in% c("AI") ~ 5,
+    race %in% c("BR","OT","AR","MR") ~ 6,
+    TRUE ~ as.numeric(NA)),
+    race_csg_6 = factor(race_csg_6,
+         levels = c(1,2,3,4,5,6),
+         labels = c("Asian/Native Hawaiian", "Black", "Hispanic", "White","American Indian", "Multi Racial/Other"))) %>% ### use factor function to assign labels to values)
+  ungroup() %>% 
+  mutate(gender_clean = case_when( ### there are six records for which there is an 'unknown' value and 44 missing records -- i am grouping these together here
+    gender=="F" ~ 1,
+    gender=="M" ~ 2,
+    TRUE ~ as.numeric(NA)),
+    gender_clean = factor(gender_clean,
+         levels = c(1,2),
+         labels = c("Female", "Male"))) ### use factor function to assign labels to values
+
+### cases
+tcs_cases_de_dup %<>%
+  mutate(race_csg_6 = case_when(
+    defendant_race %in% c("OA","A","CH","K","HI") ~ 1,
+    defendant_race %in% c("BA","AF") ~ 2,
+    defendant_race %in% c("SA","H") ~ 3,
+    defendant_race %in% c("WA","Caucasian","Russian","Romanian") ~ 4,
+    defendant_race %in% c("AI") ~ 5,
+    defendant_race %in% c("BR","OT","AR","MR") ~ 6,
+    TRUE ~ as.numeric(NA)),
+    race_csg_6 = factor(race_csg_6,
+         levels = c(1,2,3,4,5,6),
+         labels = c("Asian/Native Hawaiian", "Black", "Hispanic", "White","American Indian", "Multi Racial/Other"))) ### use factor function to assign labels to values)
+```
+
+<br><br>
+
+### Join `Cases` to `Placements` to analyze placements counts and LOS by race/ethnicity
+```{r warning=FALSE, message=FALSE}
+### we don't successfully join for 62 placement records out of 10,325 total (0.6%; 99.4% match rate here) -- records will only be dropped when using data from `cases` data frame -- namely race/ethnicity
+tcs_placements_case_de_dup <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,by=c("juvenile_nbr","case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type"))
+```
+
+<br><br>
+
+### Median LOS -- Detention, Residential, and Treatment, 2016-2018, by race/ethnicity (individual placements)
+
+Note: We're missing race data for 1,557/10,325 individual placement records (15%) with cases data and for 1,495/10,325 individual placement records (14.5%) -- so i'll just use the race field from `placements`
+```{r warning=FALSE, message=FALSE}
+tcs_placements_de_dup_median_race <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018),
+         !is.na(race_csg_6)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  distinct(unique_placement_id,.keep_all=TRUE) %>% 
+  group_by(race_csg_6) %>% 
+  summarize(`Median Length of Stay, Overall (Days)` = round(median(unique_placement_los, na.rm = TRUE), digits = 0),
+            # `Median Length of Stay, Detention (Sample N)` = n_distinct(unique_placement_id[!is.na(los_unique_placement_detention_only)==TRUE]), 
+            `Median Length of Stay, Detention (Days)` = round(median(los_unique_placement_detention_only, na.rm = TRUE), digits = 0),
+            # `Median Length of Stay, Residential (Sample N)` = n_distinct(unique_placement_id[!is.na(los_overall_residential_only)==TRUE]),
+            `Median Length of Stay, Residential (Days)` = round(median(los_unique_placement_residential_non_mdhhs_only, na.rm = TRUE), digits = 0)) %>% 
+  ungroup() 
+
+### print table via kableextra
+kable(tcs_placements_de_dup_median_race, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+<br><br>
+
+### Median LOS -- Detention, Residential, and Treatment, 2016-2018, by age (individual placements)
+
+```{r warning=FALSE, message=FALSE}
+### create age bins
+tcs_placements_de_dup %<>%
+  mutate(age_case_start_bin = case_when(
+    age_at_filing<12 ~ 1,
+    age_at_filing>=12 & age_at_filing<14 ~ 2,
+    age_at_filing>=14 & age_at_filing<16 ~ 3,
+    age_at_filing>=16 & age_at_filing<18 ~ 4,
+    age_at_filing>=18 & age_at_filing<=21 ~ 5, ### using 21 for now
+    TRUE ~ as.numeric(NA)),
+    age_case_start_bin = factor(age_case_start_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 12", "12 to 14", "14 to 16","16 to 18","18+"))) ### use factor function to assign labels to values
+
+tcs_placements_de_dup_median_age <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018),
+         !is.na(age_case_start_bin)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
+  distinct(unique_placement_id,.keep_all=TRUE) %>% 
+  group_by(age_case_start_bin) %>% 
+  summarize(`Median Length of Stay, Overall (Days)` = round(median(unique_placement_los, na.rm = TRUE), digits = 0),
+            # `Median Length of Stay, Detention (Sample N)` = n_distinct(unique_placement_id[!is.na(los_unique_placement_detention_only)==TRUE]), 
+            `Median Length of Stay, Detention (Days)` = round(median(los_unique_placement_detention_only, na.rm = TRUE), digits = 0),
+            # `Median Length of Stay, Residential (Sample N)` = n_distinct(unique_placement_id[!is.na(los_overall_residential_only)==TRUE]),
+            `Median Length of Stay, Residential (Days)` = round(median(los_unique_placement_residential_non_mdhhs_only, na.rm = TRUE), digits = 0)) %>% 
+  ungroup() 
+
+### print table via kableextra
+kable(tcs_placements_de_dup_median_age, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+<br><br>
+
+### Individual placements per 10k youth by county, 2016-2020
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### clean county name -- extracting county name
+tcs_placements_de_dup %<>%
+  mutate(county_name = word(tc_sreport_courtname, 1),
+         county_name = str_to_title(county_name),
+         county_court_name = str_to_title(county_name))
+
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
+df_ezapop_race_ethnicity_10_17_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name =  gsub(" County", "", county_name)) %>% 
+  dplyr::select(county_name,overall_10_17_population)
+
+### create overall file for numerator in % calculation below
+tcs_placements_de_dup_county <- tcs_placements_de_dup %>% 
+  filter(case_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(county_name)==TRUE) %>% 
+  distinct(unique_placement_id,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
+  group_by(county_name) %>% 
+  summarize(placement_case_count = n_distinct(unique_placement_id[place_type_clean %in% c("Residential","MDHHS")])) %>% ### either los_overall_residential_only or los_overall_mdhhs_only must have a LOS to be counted as a "case with placement" here -- josh w's definition
+  ungroup() %>% 
+  left_join(df_ezapop_race_ethnicity_10_17_county_level, by = "county_name") %>% 
+  mutate(placements_per_10k_youth = round(placement_case_count/overall_10_17_population*10000, digits = 1))
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- tcs_placements_de_dup_county %>%
+  pull(placements_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_place_rate <- c("106.5 to 186.5","36.9 to 106.5","28.4 to 36.9", "0 to 28.4")
+
+### create a new variable with the specified quantiles
+tcs_placements_de_dup_county %<>%
+  mutate(placements_per_10k_youth_quartile = cut(-placements_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_place_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+### plot
+ggplot(data = tcs_placements_de_dup_county,
+            mapping = aes(x = reorder(county_anonymous, placements_per_10k_youth), y = placements_per_10k_youth, fill = placements_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color = "gray40") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(195))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 5, y = 150, label = "Each bar represents one county's\n individual placement rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Residential or MDHHS Placements\nper 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br><br>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### export tcs_placements_de_dup
+write_rds(tcs_placements_de_dup,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Analytic Files\\tcs_placements_de_dup.rds")
+```
+
+**Data Issues**
+
+* Legal status -- the column that Laura and team said to use to create court/state ward flag is mostly missing ("Court Supervision = case or mandatory event tables with Legal Status = CTS, PRO, PWC, TWA, TWC 
+DHHS Supervision = case or mandatory event tables with Legal Status = PWS, TWS")
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases$legal_status,useNA = 'always')
+```
+
+<br>
+
+* Case type as easier charge/offense flag -- no case types within placement file indicate a felony was most serious offense with case (?)
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_placements_de_dup$case_type,useNA = 'always')
+```
+
+<br>
+
+
+
+
+<br><br>
+
 ## Basic Sample Descriptives, Placement and Charge Data
 
 <br>
@@ -191,8 +871,10 @@ tcs_placements_year_overall <- tcs_placements_de_dup %>%
   distinct(unique_placement_id,.keep_all = TRUE) %>% 
   filter(!is.na(case_year)==TRUE,
          case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  group_by() %>% 
   summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
             `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  ungroup() %>% 
   dplyr::mutate(`Year of Case` = "Overall") 
 
 ### combine tables for kable
@@ -224,6 +906,7 @@ tcs_placements_place_type <- tcs_placements_de_dup %>%
   group_by(place_type_desc) %>% 
   summarise(`Unique Count (N)` = n_distinct(unique_placement_id),
             `Percent of Total (%)` = round(n_distinct(unique_placement_id)/unique_placement_id_n*100, digits = 2)) %>% 
+  ungroup() %>% 
   dplyr::rename(`Placement Type` = place_type_desc) %>% 
   mutate(`Placement Type` = as.character(`Placement Type`))
 
@@ -253,10 +936,6 @@ Note: Placements in this table are individual placements, not grouped by individ
 
 Question: Do all Michigan counties have their own court? We don't appear to have county of residence for youth so if multiple counties share one court, they would be grouped together here. We have one extra county -- GOGEBIC -- in the case data but not in the placement data
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
-### clean county name
-tcs_placements_de_dup %<>%
-  mutate(county_court_name = str_to_title(tc_sreport_courtname))
-         
 ### create overall placement count denominator for % in cross-tabs
 unique_placement_id_n <- n_distinct(tcs_placements_de_dup$unique_placement_id[!is.na(tcs_placements_de_dup$county_court_name)==TRUE])
 
@@ -529,21 +1208,21 @@ knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC
 ## Joining Files
 
 #### Placements and Cases 
-```{r warning=FALSE}
+```{r eval=FALSE,warning=FALSE}
 tcs_placements_case <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,by=c("juvenile_nbr","case_number"))
 ```
 
 <br>
 
 #### Placements and Charges 
-```{r warning=FALSE}
+```{r eval=FALSE,warning=FALSE}
 tcs_placements_case <- left_join(tcs_placements_de_dup,tcs_charges_de_dup,by="case_number")
 ```
 
 <br>
 
 #### Placements and Dispositions
-```{r warning=FALSE}
+```{r eval=FALSE,warning=FALSE}
 tcs_placements_dispo <- left_join(tcs_placements_de_dup,tcs_dispositions_de_dup,by=c("juvenile_nbr","case_number"))
 ```
 
