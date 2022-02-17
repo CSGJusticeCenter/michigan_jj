@@ -12,9 +12,113 @@ output:
 ```{r include=FALSE}
 ### call libraries
 library(easypackages)
-libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","formattable","ggtext")
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
+````
+
+```{r include=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_mdhhs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/MDHHS/Placements/Analytic Files")
+
+### read in cleaned mdhhs file
+jj_assessments_placement_legal_status_clean <- readr::read_rds(
+  file.path(sharepoint_mdhhs_data_path, "jj_mdhhs_placements_analytic_file_to_viz.rds")) 
 ```
 
+#### Example for Josh to edit example visual w/ legend:
+
+<br><br>
+
+### Formerly slide 19, now slide 30ish?, CCI and MDHHS LOS Distribution
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+### CCI and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added together within episode; e.g. total detention LOS for one placement episode may add the LOS for several unique detention placements), 2015-2018
+
+### Filters: Placement episodes with only in home and/or detention/jail placements are excluded (placement_episode_does_count==1), use only first placement within an episode since we are plotting los calculated at the episode-level (placement_episode_no==1), exclude cases where bins are NA, and only looking at 2015-2018
+
+### CCI denominator for percent calculation
+cci_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_cci_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+### CCI LOS distribution percent
+cci_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_cci_only_grouped_bin)) %>% 
+    group_by(los_overall_cci_only_grouped_bin) %>% 
+  summarise(percent = round(n_distinct(placement_unique_id)/(cci_los_overall_denom$n_count), digits = 2)) %>% 
+  mutate(facility = 'CCI') %>% ### label facility for merge with mdhhs calculation
+  rename(los_bins = los_overall_cci_only_grouped_bin)
+
+### MDHHS denominator for percent calculation
+mdhhs_los_overall_denom <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_mdhhs_only_grouped_bin)==TRUE) %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+### MDHHS LOS distribution percent
+mdhhs_los_overall_grouped <- jj_assessments_placement_legal_status_clean %>% 
+    filter(placement_episode_start_year %in% c(2015,2016,2017,2018),
+         placement_episode_does_count==1,
+         placement_episode_no==1,
+         !is.na(los_overall_mdhhs_only_grouped_bin)) %>% 
+    group_by(los_overall_mdhhs_only_grouped_bin) %>% 
+  summarise(percent = round(n_distinct(placement_unique_id)/(mdhhs_los_overall_denom$n_count), digits = 2)) %>% 
+  mutate(facility = 'MDHHS') %>% ### label facility for merge with cci calculation
+  rename(los_bins = los_overall_mdhhs_only_grouped_bin)
+
+## combine cci and mdhhs and set facility as factor to order them
+combined_los_overall_mdhhs_cci_only <- rbind(cci_los_overall_grouped,mdhhs_los_overall_grouped) %>% 
+  filter(facility %in% c("MDHHS","CCI")) %>% 
+  mutate(facility = factor(facility,
+         levels = c("MDHHS", "CCI")))
+
+### plot
+ggplot(data = combined_los_overall_mdhhs_cci_only,
+            mapping = aes(x = facility, 
+                          y = percent, 
+                          fill = forcats::fct_rev(los_bins))) + 
+  geom_bar(position = "dodge", 
+           stat = "identity") +
+  scale_fill_manual(values = rev(c("#d6df23","#007392","#eeed90","#0db4e4","#315c15"))) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), 
+                     limits=c(min(0), 
+                                           max(.65))) +
+  scale_x_discrete(labels = scales::wrap_format(18),
+                   limits = rev) +
+    theme(strip.text.x = element_text(face = "bold"),
+          legend.position = "top",
+          axis.text.y = element_text(face = "bold", 
+                                     hjust = 1, 
+                                     size = 12)) +
+    labs(y = NULL, 
+         x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  geom_label_repel(aes(label = scales::percent(as.numeric(percent), 
+                                               accuracy = 1), 
+                       group = forcats::fct_rev(los_bins)),
+                  position = position_dodge(width = .9),
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.1,
+                  box.padding = 0.1,
+                  fill = "white",
+                  color = "gray40",
+                  segment.color = NA,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE)
+```
 
 ```{r include=FALSE}
 ### set theme and font size
@@ -23,8 +127,8 @@ theme_set(theme_minimal(20, base_family = "Calibri"))
 ### disable scientific notation for viz
 options(scipen=999)
 
-### full jj blue palette for reference
-jj_pal <- c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")
+### palette options for reference
+jj_pal_old <- c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")
 
 new_pal_five <- c("#d6df23","#007392","#eeed90","#0db4e4","#315c15")
 
@@ -33,11 +137,6 @@ new_pal_six <- c("#7fc241","#d6df23","#007392","#eeed90","#0db4e4","#315c15")
 new_pal_blue_two <- c("#007392","#0db4e4")
 
 new_pal_blue_two_other <- c("#007392","#d6df23")
-```
-
-```{r include=FALSE}
-### export jj_assessments_placement_legal_status_clean for viz
-jj_assessments_placement_legal_status_clean <- read_rds("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_mdhhs_placements_analytic_file_to_viz.txt")
 ```
 
 ```{r eval=FALSE, include=FALSE, warning=FALSE, message=FALSE}

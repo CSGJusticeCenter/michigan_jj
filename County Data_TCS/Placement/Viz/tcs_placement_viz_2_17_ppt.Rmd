@@ -79,9 +79,10 @@ tcs_placements_clean <- read_rds(
   file.path(sharepoint_tcs_data_path, "tcs_placements_de_dup.rds")) %>% 
   mutate(place_year = year(ymd(place_begin_date))) ### create year of placement to use instead of year that case was filed -- to align with Becky's Kalamazoo data when used and to be consistent throughout
 
-### set sharepoint path using csgjcr::csg_sp_path function
+### set sharepoint for path kalamazoo using csgjcr::csg_sp_path function
 sharepoint_kalamazoo_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/Kalamazoo")
 ```
+
 
 ## Detention
 
@@ -519,7 +520,6 @@ ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Docum
 
 ### Detention rate by county (per 10k youth) including Kalamazoo, 2016-2020 
 
-FOR INTERNAL DISCUSSION: KALAMAZOO HAS HIGHER DETENTION RATE THAN OTHER COUNTIES IN SAMPLE...REAL DIFFERENCE OR DATA COLLECTION/MEASUREMENT/MANAGEMENT DIFFERENCE?
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### rate calculation: mean(2016-2020 detentions)/county youth population * 10,000
 

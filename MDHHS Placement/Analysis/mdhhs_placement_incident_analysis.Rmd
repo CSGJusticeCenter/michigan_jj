@@ -1448,7 +1448,7 @@ jj_assessments_placement_legal_status_clean %<>%
 
 ```{r include=FALSE}
 ### export jj_assessments_placement_legal_status_clean for viz
-write_rds(jj_assessments_placement_legal_status_clean, "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_mdhhs_placements_analytic_file_to_viz.txt")
+write_rds(jj_assessments_placement_legal_status_clean, "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\MDHHS\\Placements\\Analytic Files\\jj_mdhhs_placements_analytic_file_to_viz.rds")
 ```
 
 <br><br>
