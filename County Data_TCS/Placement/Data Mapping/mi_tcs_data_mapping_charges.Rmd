@@ -1,5 +1,5 @@
 ---
-title: "county_data_tcs_mapping"
+title: "county_data_tcs_mapping_charge_data"
 author: "Andrew Byrum"
 date: "2/8/2022"
 output: html_document
@@ -22,15 +22,6 @@ libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer"
 # set csg path -- until i am able to download csgjcr packages
 csg_path <- "C:/Users/abyrum/The Council of State Governments/JC Research - Documents/JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS"
 
-# cases
-tcs_cases <- read_xlsx(
-  file.path(
-    csg_path, "TCS_Cases_A.xlsx"),
-  .name_repair = make_clean_names
-  ) %>%
-  mutate(across(where(is.POSIXct), as.Date)) %>% 
-  select(juvenile_nbr,case_number,offense_dt)
-
 # charges
 tcs_charges <- read_xlsx(
   file.path(
@@ -38,24 +29,7 @@ tcs_charges <- read_xlsx(
   .name_repair = make_clean_names
   ) %>%
   mutate(across(where(is.POSIXct), as.Date)) %>% 
-  select(id,case_id)
-
-# dispositions
-tcs_dispositions <- read_xlsx(
-  file.path(
-    csg_path, "TCS_DispositionsPerCharge_A.xlsx"),
-  .name_repair = make_clean_names
-  ) %>%
-  mutate(across(where(is.POSIXct), as.Date)) %>% 
-  select(name_nbr,case_id,charge_count,id)
-
-# # sentencing -- this is "Sentencing results on adult criminal FJ and DJ sentencings."
-# tcs_sentencing <- read_xlsx(
-#   file.path(
-#     csg_path, "TCS_Sentencings_A.xlsx"),
-#   .name_repair = make_clean_names
-#   ) %>%
-#   mutate(across(where(is.POSIXct), as.Date))
+  select(id,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type)
 
 # placements
 tcs_placements <- read_xlsx(
@@ -64,31 +38,27 @@ tcs_placements <- read_xlsx(
   .name_repair = make_clean_names
   ) %>%
   mutate(across(where(is.POSIXct), as.Date)) %>% 
-  select(name_nbr,case_id,place_begin_date,everything())
+  select(name_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type)
 
 ```
 
 ```{r echo=FALSE,warning=FALSE,message=FALSE}
 ### create data map using datamodelr package; first, we have to name each table in the list we're creating, second we establish which columns are primary keys for each table via dm_set_key, and lastly we indicate how tables should be joined together -- which produces arrows between two tables via dm_add_references (this data map will need to be confirmed with our Michigan data contacts)
-michigan_placements_data_map <- list(tcs_cases = tcs_cases, tcs_charges = tcs_charges, tcs_dispositions = tcs_dispositions, tcs_placements = tcs_placements) %>% ### list dataframes to map
+michigan_placements_data_map_charges <- list(tcs_charges = tcs_charges,tcs_placements = tcs_placements) %>% ### list dataframes to map
     dm_from_data_frames() %>%
-    dm_set_key("tcs_cases", c("juvenile_nbr","case_number","offense_dt")) %>% ### set primary keys in each dataframe 
-    dm_set_key("tcs_charges", c("id","case_id")) %>% 
-    dm_set_key("tcs_dispositions", c("name_nbr","case_id","charge_count","id")) %>%
+    dm_set_key("tcs_charges", c("id","case_id")) %>% ### set primary keys in each dataframe 
     dm_set_key("tcs_placements", c("name_nbr","case_id","place_begin_date")) %>%
-    dm_add_references(tcs_dispositions$name_nbr == tcs_cases$juvenile_nbr, 
-        tcs_charges$case_id == tcs_cases$case_number,
-        tcs_placements$name_nbr == tcs_cases$juvenile_nbr,
-        tcs_placements$case_id == tcs_cases$case_number,
-        tcs_dispositions$case_id == tcs_cases$case_number,
-        tcs_dispositions$name_nbr == tcs_cases$juvenile_nbr,
-        tcs_dispositions$case_id == tcs_charges$case_id,
-        tcs_dispositions$id == tcs_charges$id) %>% 
-    dm_create_graph(rankdir = "BT", columnArrows = FALSE, col_attr = c("column")) ### draw arrow to establish linkage relationship
+    dm_add_references(tcs_charges$case_id == tcs_placements$case_id, 
+        tcs_charges$court_type == tcs_placements$court_type,
+        tcs_charges$year == tcs_placements$year,
+        tcs_charges$tc_sreport_court_jcl == tcs_placements$tc_sreport_court_jcl,
+        tcs_charges$case_year == tcs_placements$case_year,
+        tcs_charges$case_type == tcs_placements$case_type) %>% 
+    dm_create_graph(rankdir = "RL", columnArrows = FALSE, col_attr = c("column")) ### draw arrow to establish linkage relationship
 
-michigan_placements_data_map
+michigan_placements_data_map_charges
 
 ### export data map as png file -- had to play around with height and width to render an image that kept legibility as user zooms in 
-dm_export_graph(michigan_placements_data_map, file_name = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping.png")
+dm_export_graph(michigan_placements_data_map_charges, file_name = "C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping_charges.png")
 
 ```

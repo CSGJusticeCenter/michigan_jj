@@ -12,7 +12,7 @@ output:
 ```{r include=FALSE}
 ### call libraries
 library(easypackages)
-libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych","ragg")
 ````
 
 ```{r include=FALSE}
@@ -26,10 +26,7 @@ jj_assessments_placement_legal_status_clean <- readr::read_rds(
 
 #### Example for Josh to edit example visual w/ legend:
 
-<br><br>
-
-### Formerly slide 19, now slide 30ish?, CCI and MDHHS LOS Distribution
-```{r echo=FALSE, warning=FALSE, message=FALSE}
+```{r eval=FALSE,echo=FALSE, warning=FALSE, message=FALSE}
 ### CCI and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added together within episode; e.g. total detention LOS for one placement episode may add the LOS for several unique detention placements), 2015-2018
 
 ### Filters: Placement episodes with only in home and/or detention/jail placements are excluded (placement_episode_does_count==1), use only first placement within an episode since we are plotting los calculated at the episode-level (placement_episode_no==1), exclude cases where bins are NA, and only looking at 2015-2018
@@ -252,7 +249,7 @@ jj_placement_episode_count_disp_risk_placement_table_plot <- jj_placement_episod
          `Placement Episodes Missing Assessments` = scales::percent(mean(as.numeric(value[risk_level=="Missing"]), na.rm = TRUE), 
                                                             accuracy = 1)) %>% 
   ungroup() %>% 
-  mutate(living_arrangement_grouped_out_of_home_only = ifelse(living_arrangement_grouped_out_of_home_only=="CCI","CCI Facility", "MDHHS Facility")) %>% 
+  mutate(living_arrangement_grouped_out_of_home_only = ifelse(living_arrangement_grouped_out_of_home_only=="CCI","CCI", "MDHHS")) %>% 
   filter(!is.na(risk_level)==TRUE,
          risk_level!="Missing") %>% 
   mutate(living_arrangement_n = paste0(
@@ -263,28 +260,27 @@ jj_placement_episode_count_disp_risk_placement_table_plot <- jj_placement_episod
 
 ### plot
 mdhhs_disp_risk_placement <- ggplot(data = jj_placement_episode_count_disp_risk_placement_table_plot,
-            mapping = aes(x = living_arrangement_grouped_out_of_home_only, 
+            mapping = aes(x = forcats::fct_rev(risk_level), 
                           y = value, 
                           fill = forcats::fct_rev(risk_level))) + 
   geom_bar(position = "dodge", stat = "identity") +
   scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
   scale_y_continuous(label=scales::percent_format(accuracy = 1),
-                     limits=c(min(0), max(.75))) +
-  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
- theme(legend.position = "top",
-        legend.title.align=0.5,
-        plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5),
-        plot.caption = element_text(hjust = 0.5),
-        axis.ticks.length = unit(0, "cm"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+                     limits=c(min(0), max(.7))) +
+  # scale_x_discrete(limits = rev) +
+ theme(axis.text.x = element_text(size = 10, face="bold"),
+       axis.ticks.length = unit(0, "cm"),
+        strip.placement="outside",
+        strip.text.x=element_text(angle=180, hjust=1, face="bold", size=11,
+                              margin=margin(r=10))) +
     labs(y = NULL, x = NULL,
       caption = NULL,
       title = NULL,
       subtitle = NULL,
       fill = NULL) +
     coord_flip() +
-  guides(fill = guide_legend(reverse = TRUE)) + 
+    facet_grid(living_arrangement_grouped_out_of_home_only ~ ., scales="free_y", space="free_y", switch="y") +
+  guides(fill = FALSE) + 
   geom_label_repel(aes(label = scales::percent(value, accuracy = .1), group = forcats::fct_rev(risk_level)),
                   position = position_dodge(width = .9),
                   direction = 'x',
@@ -352,10 +348,10 @@ jj_placement_episode_county %<>%
 ### plot
 mdhhs_placement_episode_rate_county <- ggplot(data = jj_placement_episode_county,
             mapping = aes(x = reorder(county_anonymous, placements_per_10k_youth), y = placements_per_10k_youth, fill = placements_per_10k_youth_quartile)) + 
-  geom_bar(stat = "identity") +
+  geom_bar(stat = "identity", color="white",size=0.15) +
   scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
   scale_y_continuous(limits=c(min(0), 
-                                           max(45))) +
+                                           max(40))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
   annotate("text", x = 55, y = 30, label = "Each bar represents one county's\n placement episode rate", colour = "#00475d", size = 4.5) +
     theme(panel.grid.major = element_blank(),
@@ -366,7 +362,7 @@ mdhhs_placement_episode_rate_county <- ggplot(data = jj_placement_episode_county
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank(),
         plot.caption = element_text(hjust = 0.5)) +
-    labs(y = "Episodes per 10k youth", x = NULL,
+    labs(y = NULL, x = NULL,
       caption = NULL,
       title = NULL,
       subtitle = NULL,
@@ -783,29 +779,144 @@ CCI and MDHHS Length of Stay, Distribution within Placement Episodes (LOS added 
 
 Note: Placement episodes with only in home and/or detention/jail placements are excluded 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
+jj_assessments_placement_legal_status_clean_has_cci_mdhhs <- jj_assessments_placement_legal_status_clean %>%
+  filter(!is.na(place_no_of_earliest_cci_mdhhs)==TRUE,
+         place_no_of_earliest_cci_mdhhs==placement_episode_no) %>% 
+  mutate(first_place_type_cci_mdhhs = living_arrangement)
+
+
+# ### create grouped new los bins -- only five categories for this visual
+# jj_assessments_placement_legal_status_clean %<>%
+#   # group_by(placement_episode_unique_id) %>% 
+#   # mutate(los_overall_cci_only_grouped = sum(los_overall_cci_only, na.rm = TRUE)) %>% 
+#   # ungroup() %>% 
+#  mutate(los_overall_cci_only_grouped_bin = case_when(
+#     los_overall_cci_only<32 & los_overall_cci_only!=0 ~ 1,
+#     los_overall_cci_only>=32 & los_overall_cci_only<92 ~ 2,
+#     los_overall_cci_only>=92 & los_overall_cci_only<=275 ~ 3,
+#     los_overall_cci_only>=275 & los_overall_cci_only<=549 ~ 4,
+#     los_overall_cci_only>549 ~ 5,
+#     TRUE ~ as.numeric(NA)),
+#     los_overall_cci_only_grouped_bin = factor(los_overall_cci_only_grouped_bin,
+#          levels = c(1,2,3,4,5),
+#          labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
+# 
+# jj_assessments_placement_legal_status_clean %<>%
+#   # group_by(placement_episode_unique_id) %>% 
+#   # mutate(los_overall_mdhhs_only_grouped = sum(los_overall_mdhhs_only, na.rm = TRUE)) %>% 
+#   # ungroup() %>% 
+#  mutate(los_overall_mdhhs_only_grouped_bin = case_when(
+#     los_overall_mdhhs_only<32 & los_overall_mdhhs_only!=0 ~ 1,
+#     los_overall_mdhhs_only>=32 & los_overall_mdhhs_only<92 ~ 2,
+#     los_overall_mdhhs_only>=92 & los_overall_mdhhs_only<=275 ~ 3,
+#     los_overall_mdhhs_only>=275 & los_overall_mdhhs_only<=549 ~ 4,
+#     los_overall_mdhhs_only>549 ~ 5,
+#     TRUE ~ as.numeric(NA)),
+#     los_overall_mdhhs_only_grouped_bin = factor(los_overall_mdhhs_only_grouped_bin,
+#          levels = c(1,2,3,4,5),
+#          labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
+
+# jj_assessments_placement_legal_status_clean_has_cci_mdhhs %<>%
+#   # group_by(placement_episode_unique_id) %>% 
+#   # mutate(los_overall_detention_only_grouped = sum(los_overall_detention_only, na.rm = TRUE)) %>% 
+#   # ungroup() %>% 
+# mutate(los_overall_detention_only_grouped_bin = case_when(
+#     los_overall_detention_only<3 & los_overall_detention_only!=0 ~ 1,
+#     los_overall_detention_only>=3 & los_overall_detention_only<7 ~ 2,
+#     los_overall_detention_only>=7 & los_overall_detention_only<15 ~ 3,
+#     los_overall_detention_only>=15 & los_overall_detention_only<=30 ~ 4,
+#     los_overall_detention_only>=30 & los_overall_detention_only<=90 ~ 5,
+#     los_overall_detention_only>90 ~ 6,
+#     TRUE ~ as.numeric(NA)),
+#     los_overall_detention_only_grouped_bin = factor(los_overall_detention_only_grouped_bin,
+#          levels = c(1,2,3,4,5,6),
+#          labels = c("1 to 3 Days", "3 to 7 Days", "7 to 14 Days","15 to 30 Days","30 to 90 Days","90 Days+"))) ### use factor function to assign labels to values
+
+jj_assessments_placement_legal_status_clean_has_cci_mdhhs %<>%
+  # group_by(placement_episode_unique_id) %>% 
+  # mutate(los_overall_mdhhs_only_grouped = sum(los_overall_mdhhs_only, na.rm = TRUE)) %>% 
+  # ungroup() %>% 
+ mutate(los_overall_all_included_grouped_bin = case_when(
+    los_overall_all_included<32 & los_overall_all_included!=0 ~ 1,
+    los_overall_all_included>=32 & los_overall_all_included<92 ~ 2,
+    los_overall_all_included>=92 & los_overall_all_included<=275 ~ 3,
+    los_overall_all_included>=275 & los_overall_all_included<=549 ~ 4,
+    los_overall_all_included>549 ~ 5,
+    TRUE ~ as.numeric(NA)),
+    los_overall_all_included_grouped_bin = factor(los_overall_all_included_grouped_bin,
+         levels = c(1,2,3,4,5),
+         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to
+
+
+
+### CCI
+cci_los_overall_denom <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
+    filter(placement_episode_start_year %in% c(2016,2017),
+         !is.na(los_overall_all_included_grouped_bin)==TRUE,
+         first_place_type_cci_mdhhs=="Child Caring Institution") %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+cci_los_overall_grouped <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
+    filter(placement_episode_start_year %in% c(2016,2017),
+         !is.na(los_overall_all_included_grouped_bin),
+         first_place_type_cci_mdhhs=="Child Caring Institution") %>% 
+    group_by(los_overall_all_included_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(placement_unique_id)/(cci_los_overall_denom$n_count), digits = 2))
+
+## use gather for line plot
+cci_los_overall_table <- cci_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_overall_all_included_grouped_bin) %>% 
+  mutate(facility = 'CCI')
+
+### MDHHS
+mdhhs_los_overall_denom <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
+    filter(placement_episode_start_year %in% c(2016,2017),
+         !is.na(los_overall_all_included_grouped_bin)==TRUE,
+         first_place_type_cci_mdhhs=="MDHHS Training School") %>% 
+  summarise(n_count = n_distinct(placement_unique_id))
+
+mdhhs_los_overall_grouped <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
+    filter(placement_episode_start_year %in% c(2016,2017),
+         !is.na(los_overall_all_included_grouped_bin),
+         first_place_type_cci_mdhhs=="MDHHS Training School") %>% 
+    group_by(los_overall_all_included_grouped_bin) %>% 
+  summarise(n_count = round(n_distinct(placement_unique_id)/(mdhhs_los_overall_denom$n_count), digits = 2))
+
+## use gather for line plot
+mdhhs_los_overall_table <- mdhhs_los_overall_grouped %>%
+  gather(year, value, `n_count`) %>% 
+  dplyr::rename(los_bins = los_overall_all_included_grouped_bin) %>% 
+  mutate(facility = 'MDHHS')
+
+
+mdhhs_los_overall_table_missing_row <- tribble(
+  ~`los_bins`,   ~`year`, ~`value`,    ~`facility`,                 
+  "Less than 1 Month", "n_count",as.numeric(0.00), "MDHHS") 
+
 ## combine
-combined_los_overall_table_mdhhs_cci_only <- rbind(cci_los_overall_table,mdhhs_los_overall_table,detention_los_overall_table,mdhhs_los_overall_table_missing_row) %>% 
-  filter(facility %in% c("MDHHS","CCI")) %>% 
-  mutate(facility = factor(facility,
-         levels = c("MDHHS", "CCI")))
+combined_los_overall_table_detention_only <- rbind(cci_los_overall_table,mdhhs_los_overall_table,mdhhs_los_overall_table_missing_row) 
   
-mdhhs_cci_mdhhs_los_bins <- ggplot(data = combined_los_overall_table_mdhhs_cci_only,
-            mapping = aes(x = facility, y = value, fill = forcats::fct_rev(los_bins))) + 
+mdhhs_cci_mdhhs_los_bins_2016_2017 <- ggplot(data = combined_los_overall_table_detention_only,
+            mapping = aes(x = los_bins, y = value, fill = forcats::fct_rev(los_bins))) + 
   geom_bar(position = "dodge", stat = "identity") +
   scale_fill_manual(values = rev(c("#d6df23","#007392","#eeed90","#0db4e4","#315c15"))) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
                                            max(.65))) +
   scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
-    theme(strip.text.x = element_text(face = "bold"),
-          legend.position = "top",
-          axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+    theme(axis.text.x = element_text(size = 10, face="bold"),
+       axis.ticks.length = unit(0, "cm"),
+        strip.placement="outside",
+        strip.text.x=element_text(angle=180, hjust=1, face="bold", size=11,
+                              margin=margin(r=10))) +
     labs(y = NULL, x = NULL,
       caption = NULL,
       title = NULL,
       subtitle = NULL,
       fill = NULL) +
     coord_flip() +
-  guides(fill = guide_legend(reverse = TRUE)) + 
+    facet_grid(forcats::fct_rev(facility) ~ ., scales="free_y", space="free_y", switch="y") +
+  guides(fill = FALSE) + 
   geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
                   position = position_dodge(width = .9),
                   direction = 'x',
@@ -819,10 +930,9 @@ mdhhs_cci_mdhhs_los_bins <- ggplot(data = combined_los_overall_table_mdhhs_cci_o
                   na.rm = TRUE,
                   show.legend = FALSE)
 
-mdhhs_cci_mdhhs_los_bins
+mdhhs_cci_mdhhs_los_bins_2016_2017
 
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_cci_mdhhs_los_bins.png", mdhhs_cci_mdhhs_los_bins, width = 8, height = 6)
-
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_cci_mdhhs_los_bins_2016_2017.png", mdhhs_cci_mdhhs_los_bins_2016_2017, width = 8, height = 6)
 ```
 
 <br><br>
@@ -1215,25 +1325,30 @@ jj_placement_episode_history_table %<>%
 
 ### plot
 mdhhs_state_ward_dual_ward_prior_history <- ggplot(data = jj_placement_episode_history_table,
-            mapping = aes(x = legal_status, y = percent, fill = prior_placement_episodes_bin)) +
+            mapping = aes(x = prior_placement_episodes_bin, y = percent, fill = prior_placement_episodes_bin)) +
   geom_bar(stat = "identity", position = "dodge") +
     scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
     scale_y_continuous(label=scales::percent_format(accuracy = 1),
                        limits=c(min(0), 
                                 max(.8))) +
     scale_x_discrete(labels = scales::wrap_format(15), limits = rev) +
-    theme(strip.text.x = element_text(face = "bold"),
-          axis.text.x = element_text(face = "bold", vjust = 1, size = 12)) +
+    theme(axis.text.x = element_text(size = 10, face="bold"),
+       axis.ticks.length = unit(0, "cm"),
+        strip.placement="outside",
+        strip.text.x=element_text(angle=180, hjust=1, face="bold", size=11,
+                              margin=margin(r=10))) +
     labs(y = NULL, x = NULL,
       caption = NULL,
       title = NULL,
       subtitle = NULL,
-      fill = "Prior MDHHS\nPlacement Episodes") +
-  guides(color = guide_legend(reverse = TRUE)) + 
+      fill = NULL) +
+    coord_flip() +
+    facet_grid(legal_status ~ ., scales="free_y", space="free_y", switch="y") +
+  guides(fill = FALSE) + 
   geom_label_repel(aes(label = scales::percent(percent, accuracy = 1), group = prior_placement_episodes_bin),
                  position = position_dodge(.9),
-                  # direction = 'y',
-                  vjust = 0.75,
+                  direction = 'x',
+                  hjust = 0.75,
                   label.padding = 0.25,
                   box.padding = 0.25,
                   fill = "white",
@@ -1241,6 +1356,8 @@ mdhhs_state_ward_dual_ward_prior_history <- ggplot(data = jj_placement_episode_h
                    fontface = "bold",
                    na.rm = TRUE,
                    show.legend = FALSE) 
+
+mdhhs_state_ward_dual_ward_prior_history
 
 ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_state_ward_dual_ward_prior_history.png", mdhhs_state_ward_dual_ward_prior_history, width = 8, height = 6)
 ```
@@ -1340,16 +1457,21 @@ jj_placement_race_ethnicity_rri_plot <- rbind(jj_placement_race_ethnicity_rri_ta
 jj_placement_race_ethnicity_rri_plot %<>%
   gather(rri_measure, rri, `Unique Youth Placed, RRI (to white youth)`:`Unique Youth Placed, Dual Ward, RRI (to white youth)`) %>%
     mutate(rri_measure = factor(rri_measure,
-                                levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)")))
+                                levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)"))) %>% 
+  mutate(rri_measure = case_when(
+    rri_measure=="Unique Youth Placed, RRI (to white youth)" ~ "Overall",
+    rri_measure=="Unique Youth Placed, State Ward, RRI (to white youth)" ~ "State Wards",
+    rri_measure=="Unique Youth Placed, Dual Ward, RRI (to white youth)" ~ "Dual Wards",
+    TRUE ~ as.numeric(NA)))
 
 rri_labels <- c(`Unique Youth Placed, RRI (to white youth)` = "Youth Placed, Overall",
             `Unique Youth Placed, State Ward, RRI (to white youth)` = "Youth Placed, State Wards",
             `Unique Youth Placed, Dual Ward, RRI (to white youth)` = "Youth Placed, Dual Wards")
 
-mdhhs_rri_overal_legal_status <- ggplot(data = jj_placement_race_ethnicity_rri_plot, aes(y = rri, x = rri_measure, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
+mdhhs_rri_overall_legal_status <- ggplot(data = jj_placement_race_ethnicity_rri_plot, aes(y = rri, x = rri_measure, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
   geom_bar(stat = "identity", position = "dodge", color = "gray80") +
   geom_abline(slope=0, intercept=1,  col = "#000000", size = 1.5, linetype="dashed") +
-  scale_x_discrete(labels = as_labeller(rri_labels),limits = rev) +
+  scale_x_discrete(labels = as_labeller(rri_labels), limits = rev) +
   scale_y_continuous(limits=c(min(0), 
                                            max(4.5))) +
   scale_fill_manual(values = c("#0db4e4","#007392")) +
@@ -1359,7 +1481,7 @@ mdhhs_rri_overal_legal_status <- ggplot(data = jj_placement_race_ethnicity_rri_p
                              keywidth = 3,
                              nrow = 1)) +
   labs(x = NULL, y = NULL,
-       fill = "Race/Ethnicity",
+       fill = NULL,
        caption = NULL,
        title = NULL,
        subtitle = NULL) +
@@ -1367,7 +1489,17 @@ mdhhs_rri_overal_legal_status <- ggplot(data = jj_placement_race_ethnicity_rri_p
         legend.title.align=0.5,
         axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
         axis.ticks.length = unit(0, "cm")) +
-  coord_flip() + 
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+ guides(fill = guide_legend(reverse = TRUE,
+                             title.position = "top",
+                             label.position = "bottom",
+                             keywidth = 3,
+                             nrow = 1)) +
   geom_label_repel(aes(label = format(round(as.numeric(rri), digits = 2), nsmall=2), group = forcats::fct_rev(`Race/Ethnicity`)),
                   position = position_dodge(.75),
                   direction = 'x',
@@ -1379,11 +1511,11 @@ mdhhs_rri_overal_legal_status <- ggplot(data = jj_placement_race_ethnicity_rri_p
                   fontface = "bold",
                    na.rm = TRUE,
                    show.legend = FALSE) +
-  annotate("text", x = 3.55, y = 2.9, label = "This line represents White youth (reference group)", colour = "#000000", size = 3.5, fontface = 2)
+  annotate("text", x = 3.52, y = 2.47, label = "This line represents White youth (reference group)", colour = "#000000", size = 3.5, fontface = 2)
 
-mdhhs_rri_overal_legal_status
+mdhhs_rri_overall_legal_status
 
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_state_ward_dual_ward_prior_history.png", mdhhs_rri_overal_legal_status, width = 8, height = 6)
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_rri_overall_legal_status.png", mdhhs_rri_overall_legal_status, width = 8, height = 6)
 ```
 
 <br><br>
@@ -1575,43 +1707,45 @@ jj_los_mean_race_eth_t_test_table <- jj_assessments_placement_legal_status_clean
 
 jj_los_mean_race_eth_t_test_table <- inner_join(jj_los_mean_race_eth_t_test_table,jj_los_mean_race_eth_t_test_p_values, by="Race/Ethnicity") %>% 
   dplyr::select(`Race/Ethnicity`,`CCI Facility`, `MDHHS Facility`,`Detention*`) %>% 
-  filter(`Race/Ethnicity` %in% c("Black","White","Hispanic"))
+  filter(`Race/Ethnicity` %in% c("Black","White","Hispanic")) %>% 
+  mutate(`Race/Ethnicity` = ifelse(`Race/Ethnicity`== "Black","Black*",`Race/Ethnicity`))
 
 
 ### use gather for plotting
 jj_los_mean_race_eth_t_test_table %<>%
   gather(facility, average_los, `CCI Facility`:`Detention*`) %>%
   mutate(facility = factor(facility,
-                                levels = c("Detention*","CCI Facility","MDHHS Facility")))
+                                levels = c("Detention*","CCI Facility","MDHHS Facility"))) %>% 
+  filter(facility=="Detention*")
 
 # rri_labels <- c(`Unique Youth Placed, RRI (to white youth)` = "Youth Placed, Overall",
 #             `Unique Youth Placed, State Ward, RRI (to white youth)` = "Youth Placed, State Wards",
 #             `Unique Youth Placed, Dual Ward, RRI (to white youth)` = "Youth Placed, Dual Wards")
 
-mdhhs_los_mean_facility_race_eth <- ggplot(data = jj_los_mean_race_eth_t_test_table, aes(y = average_los, x = facility, fill = forcats::fct_rev(`Race/Ethnicity`))) + 
+mdhhs_los_mean_facility_race_eth <- ggplot(data = jj_los_mean_race_eth_t_test_table, aes(y = average_los, x = forcats::fct_rev(`Race/Ethnicity`), fill = forcats::fct_rev(`Race/Ethnicity`))) + 
   geom_bar(stat = "identity", position = "dodge", color = "gray80") +
   scale_x_discrete(limits = rev) +
   scale_y_continuous(limits=c(min(0), 
-                                           max(600))) +
+                                           max(112))) +
   scale_fill_manual(values = c("#007392","#0db4e4","#9ed4ef")) +
-  guides(fill = guide_legend(reverse = TRUE,
-                             title.position = "top",
-                             label.position = "bottom",
-                             keywidth = 3,
-                             nrow = 1)) +
+  guides(fill = FALSE) +
   labs(x = NULL, y = NULL,
-       fill = "Race/Ethnicity",
+       fill = NULL,
        caption = NULL,
        title = NULL,
        subtitle = NULL) +
-  theme(legend.position = "top",
-        legend.title.align=0.5,
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
-        plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5),
-        plot.caption = element_text(hjust = 0.5),
-        axis.ticks.length = unit(0, "cm"),) +
-  coord_flip() + 
+  theme(axis.text.x = element_text(size = 10, face="bold"),
+       axis.ticks.length = unit(0, "cm"),
+        strip.placement="outside",
+        strip.text.x=element_text(angle=180, hjust=1, face="bold", size=11,
+                              margin=margin(r=10))) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = NULL) +
+    coord_flip() +
+    # facet_grid(facility ~ ., scales="free_y", space="free_y", switch="y") +
   geom_label_repel(aes(label = paste0(average_los," Days"), group = forcats::fct_rev(`Race/Ethnicity`)),
                   position = position_dodge(.9),
                   direction = 'x',
@@ -1626,7 +1760,7 @@ mdhhs_los_mean_facility_race_eth <- ggplot(data = jj_los_mean_race_eth_t_test_ta
 
 mdhhs_los_mean_facility_race_eth
 
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_los_mean_facility_race_eth.png", mdhhs_los_mean_facility_race_eth, width = 8, height = 6)
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_los_mean_detention_only_race_eth.png", mdhhs_los_mean_facility_race_eth, width = 8, height = 6)
 ```
 
 <br><br>

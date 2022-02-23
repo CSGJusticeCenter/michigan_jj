@@ -586,7 +586,7 @@ tcs_detention_placement_rate_county_incl_kalamazoo <- ggplot(data = tcs_kalamazo
         axis.ticks.y=element_blank(),
         plot.caption = element_text(hjust = 0.5)) +
     labs(y = NULL, x = NULL,
-    caption = "Detention rate reflects the mean annual detention rate, for each county, from 2015 to 2020",
+    caption = NULL,
     title = NULL,
       subtitle = NULL,
       fill = "Detentions\nper 10k Youth") +
@@ -674,7 +674,7 @@ tcs_placement_rate_county <- ggplot(data = tcs_placements_clean_county,
           axis.ticks.y=element_blank(),
           plot.caption = element_text(hjust = 0.5)) +
     labs(y = NULL, x = NULL,
-      caption = "Placement rate reflects the mean annual placement rate, for each county, from 2015 to 2020",
+      caption = NULL,
       title = NULL,
       subtitle = NULL,
       fill = "Placements\nper 10k Youth") +
@@ -891,11 +891,11 @@ tcs_rri_placement_only_1 <- ggplot(data = tcs_placement_race_ethnicity_rri_plot,
                   fontface = "bold",
                    na.rm = TRUE,
                    show.legend = FALSE) +
-  annotate("text", x = 1.55, y = 2.95, label = "This line represents White youth (reference group)", colour = "#000000", size = 4, fontface = 2)
+  annotate("text", x = 1.55, y = 2.65, label = "This line represents White youth (reference group)", colour = "#000000", size = 4, fontface = 2)
 
 tcs_rri_placement_only_1
 
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\tcs_rri_placement_only_1.png", tcs_rri_placement_only_1, width = 8, height = 6)
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\tcs_rri_placement_only.png", tcs_rri_placement_only_1, width = 8, height = 6)
 ```
 
 <br><br>
@@ -976,7 +976,8 @@ tcs_placement_race_ethnicity_rri_plot_detention_placement <- inner_join(tcs_plac
 
 ### use gather for plotting
 tcs_placement_race_ethnicity_rri_plot_detention_placement %<>%
-  gather(rri_measure, rri, `Placements, Black Youth`:`Detention, Black Youth`) 
+  gather(rri_measure, rri, `Placements, Black Youth`:`Detention, Black Youth`) %>% 
+  filter(rri_measure=="Placements, Black Youth")
 
 
 # %>%
@@ -984,13 +985,13 @@ tcs_placement_race_ethnicity_rri_plot_detention_placement %<>%
 #                                 levels = c("Unique Youth Placed, RRI (to white youth)","Unique Youth Placed, State Ward, RRI (to white youth)","Unique Youth Placed, Dual Ward, RRI (to white youth)")))
 
 
-tcs_rri_placement_detention_2 <- ggplot(data = tcs_placement_race_ethnicity_rri_plot_detention_placement, aes(y = rri, x = rri_measure, fill = rri_measure)) + 
+tcs_rri_placements_only <- ggplot(data = tcs_placement_race_ethnicity_rri_plot_detention_placement, aes(y = rri, x = rri_measure, fill = rri_measure)) + 
   geom_bar(stat = "identity", position = "dodge", color = "gray80") +
   geom_abline(slope=0, intercept=1,  col = "#000000", size = 1.5, linetype="dashed") +
   scale_x_discrete(limits = rev) +
   scale_y_continuous(limits=c(min(0), 
-                                           max(6.5))) +
-  scale_fill_manual(values = c("#007392","#0db4e4")) +
+                                           max(5.5))) +
+  scale_fill_manual(values = c("#007392")) +
   guides(fill = FALSE) +
   labs(x = NULL, y = NULL,
        fill = NULL,
@@ -1013,9 +1014,11 @@ tcs_rri_placement_detention_2 <- ggplot(data = tcs_placement_race_ethnicity_rri_
                   fontface = "bold",
                    na.rm = TRUE,
                    show.legend = FALSE) +
-  annotate("text", x = 2.55, y = 3.75, label = "This line represents White youth (reference group)", colour = "#000000", size = 4, fontface = 2)
+  annotate("text", x = 1.55, y = 3, label = "This line represents White youth (reference group)", colour = "#000000", size = 4, fontface = 2)
 
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\tcs_rri_placement_detention_2.png", tcs_rri_placement_detention_2, width = 8, height = 6)
+tcs_rri_placements_only
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\tcs_rri_placements_only.png", tcs_rri_placements_only, width = 8, height = 6)
 ```
 
 <br><br>
