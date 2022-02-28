@@ -1,7 +1,7 @@
 ---
-title: "mi_tcs_county_placement_cleaning"
+title: "tcs_county_data_placement_charge_only_output"
 author: "Andrew Byrum"
-date: "2/8/2022"
+date: "2/24/2022"
 output: html_document
 ---
 
@@ -12,37 +12,8 @@ library(easypackages)
 libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
 ````
 
-## Analysis Outline, Placement and Charge
 
-**Placement Counts**
-
-* Placement/Detention count by charge category -- both by individual placement and by 'case' over time
-
-*And if time permits:*
-
-*	By race/ethnicity (RRI using MI population juvenile race/ethnicity data for pertinent counties)
-
-* By age
-
-**Length of Stay**
-
-* Mean and median length of stay by charge category -- both by individual placement and by 'case' over time
-
-*And if time permits:*
-
-*	By race/ethnicity (with t-tests for statistical significance of differences in means)
-
-* By age
-
-
-<br><br>
-
-## Preliminary Cleaning
-
-<br>
-
-### 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ### set sharepoint path using csgjcr::csg_sp_path function
 sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
 
@@ -87,31 +58,7 @@ tcs_mandatory_events <- read_xlsx(
   mutate(across(where(is.POSIXct), as.Date))
 ```
 
-<br><br>
-
-### 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
-
-
-From Laura, Tanya, and Susan Svoboda:
-
-For TCS, all data sets may be linked with CourtType, Year, TCSReportCourtJCL, CaseYear, CaseID and CaseType.
-
-Juvenile/Name Number is available on the following data sets:
-Cases – JuvenileNbr identifies the juvenile for the TCSreportCourtname.  Some of the FJ casetypes do not have a JuvenileNbr because a juvenile record is not created in adult cases.  In adult cases(in this data set only FJ), if the case had a prior juvenile record the JuvenileNbr will be populated indicated a reoffending juvenile in adult court.
-
-Charges – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case.
-
-MandatoryEvents –   NameNbr identifies the juvenile; 1 to many mandatory events will relate to a case.  Key events, legal status set, adjudication, disposition events etc.
-
-Placements - NameNbr identifies the juvenile; 0 to many placement events will relate to a case.  Would recommend using the PCN events and not use ORD.  Courts should be using PCN events.
-Financials –   PayorPatyNameNbr identifies the payor party.  This may or may not be the juvenile; 0 to many financial records will relate to a case.  Link to cases and use Juvenile Nbr, if needed.
-Program Results – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 0 to many program results can relate to a case.
-Sentencing – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed.
-
-
-<br>
-
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ######################################
 #### cases
 ######################################
@@ -129,9 +76,8 @@ tcs_cases_de_dup <- tcs_cases %>%
 ### 99% of dropped cases are due to 'caseload_action' -- multiple entries as different stages of case are entered 
 ```
 
-<br><br>
 
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ######################################
 #### charges
 ######################################
@@ -148,9 +94,8 @@ tcs_charges_de_dup <- tcs_charges %>%
          case_year = as.numeric(case_year)) ### recode status offense (from laura's team: "If you filter on CurrentOffense by 712A – that should give you the status offenses.")
 ```
 
-<br><br>
 
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ######################################
 #### placements
 ######################################
@@ -173,12 +118,8 @@ tcs_placements_de_dup <- tcs_placements %>%
   ungroup()
 ```
 
-<br><br>
 
-### 3. Start Cleaning w/ Placements (this will serve as base file -- as we interested only in those for whom there is placement data)
-
-Here are our groupings for placement type:
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 placement_detention <- c("Calhoun County Juvenile Home","DETENTION","I-Child Vill Det (Not VC Disp)","NON-SECURE DETENTION","OTHER COUNTY DETENTION","Regional Detention Center","SECURE DETENTION")
 
 placement_residential_non_mdhhs <- c("I-Boot Camp","I-CFY Ranch","I-Child Vill Residential","I-Child Vill Secure","I-Private Placement","Independent Placement","INSTITUTIONAL/RESIDENTIAL CARE","PRIVATE AGENCY/INSTITUTION","RESIDENTIAL PLACEMENT","CALHOUN TREATMENT CENTER","Residential Treatment Program")
@@ -194,10 +135,8 @@ placement_jail <- c("I-Oakland County Jail","Jail")
 placement_foster_shelter <- c("Foster Care-Court Supervision","Foster Care-FIA Supervision","PLACED IN FOSTER CARE-DHS SPRV","PLACED IN FOSTER CARE-CRT SPRV","Shelter Home")
 ```
 
-<br><br>
 
-Create clean placement categories 
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 tcs_placements_de_dup %<>%
   mutate(place_type_clean = 
            case_when(
@@ -216,18 +155,14 @@ tcs_placements_de_dup %<>%
   mutate(place_year = year(ymd(place_begin_date))) ### create year of placement to use instead of year that case was filed -- to align with Becky's Kalamazoo data when used and to be consistent throughout
 ```
 
-<br><br>
 
-### Join `Cases` to `Placements` to obtain adjudication date for parsing placements into pre- and post-adjudication groups (to analyze w/ most serious charge and most serious adjudicated charge, respectively)
-```{r warning=FALSE, message=FALSE}
+```{r include=FALSE}
 ### we don't successfully join for 62 placement records out of 10,325 total (0.6%; 99.4% match rate here)
 tcs_placements_cases_de_dup <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,by=c("juvenile_nbr","case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type"))
 ```
 
-<br>
 
-### Join `Charges` to `Placements` to analyze placements counts and LOS by most severe charge (adjudicated charge)
-```{r warning=FALSE, message=FALSE}
+```{r include=FALSE}
 ### we don't successfully join for 885 placement records out of 10,325 total (8.5%; 91.5% match rate here) 
 ### we also add duplicates -- as more than one charge may link to an individual placement (we will eventually de-dup by most severe adjudicated charge associated with a placement)
 ### for this analysis, we need charge data so merging via inner_join to keep only records with both placement and charge data
@@ -238,14 +173,8 @@ tcs_placements_charges_de_dup <- inner_join(tcs_placements_cases_de_dup,tcs_char
          after_adjudication_flag = ifelse(place_begin_date>=adjudication_dt,1,0))
 ```
 
-<br><br>
 
-### only keep charges with adjudication before de-duping by placement/charge
-
-NEED TO DOUBLE CHECK THIS USE OF `charge_disposition` with SCAO
-
-(NOT COUNTING THE FOLLOWING AS ADJUDICATION: CHANGE VENUE/TRANSFER, CONSENT CALENDAR PLAN, CONSENT CALENDAR PROBATION, , DISMISS INCOMPETENT, DISMISSED, DISMISSED INCOMPETENT,DIVERTED, FOUND GUILTY, FOUND NOT COMPETENT, INACTIVE INCOMPETENT, NOT AUTHORIZED, NOT CHARGED, NOT FOUND W/IN PROVISION CODE, NOT GUILTY, REMAND, TRANSFER)
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 charge_adjudicated <- c("ADMITTED ALLEGATIONS","DESIGNATED GRANTED","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE","TRADITIONAL WAIVER")
 
 ### keep only charges with adjudication
@@ -256,10 +185,8 @@ tcs_placements_charges_de_dup %<>%
          current_offense = str_replace_all(current_offense,"[:punct:]", "")) ### remove all punctuation from current_offense and make all lower case -- for merge with current_offense from Emily's lookup table
 ```
 
-<br><br>
 
-### Read in PACC code lookup table that Emily created
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ### set sharepoint path using csgjcr::csg_sp_path function
 sharepoint_pacc_lookup_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/JDW/")
 
@@ -290,18 +217,14 @@ jdw_msp_charge_pacc_code_lookup <- rbind(jdw_charge_pacc_code_lookup,msp_charge_
   distinct(current_offense,.keep_all=TRUE)
 ```
 
-<br><br>
 
-### Join jdw_charge_pacc_code_lookup to tcs_placements_charges_de_dup
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ### no corresponding pacc lookup values for 189 records (189/13955; 1.4%)
 tcs_placements_charges_de_dup_pacc <- left_join(tcs_placements_charges_de_dup,jdw_msp_charge_pacc_code_lookup,by="current_offense") 
 ```
 
-<br><br>
 
-Recode several missing offenses based on Emily's notes:
-```{r warning=FALSE, message=FALSE}
+```{r include=FALSE}
 recode_to_status <- c("712a2d4","722755","ord code 26267")
 
 recode_to_misd_non_person <- c("7503675","7505354a1","ord code 2649","ord code 26492","ord code 2651","ord code 2654","7527971a","9999999904","local orddisorderly")
@@ -311,10 +234,8 @@ recode_to_misd_person <- c("75081a1")
 recode_to_felony_person <- c("roassault police")
 ```
 
-<br>
 
-### De-dup by `placement` and `case` -- create flag to designate the most serious charge associated with that unique `placement`/`case`
-```{r warning=FALSE, message=FALSE}
+```{r include=FALSE}
 # From TCS code book: Current Offense Classification - C/Civil Infraction, F/Felony, M/Misdemeanor, S/Statute, H/High Misdemeanor, O/Other, V/Civil-Other, R/Ordinance, Z/Notice for Advisories
 
 ### pre-adjudication
@@ -353,16 +274,13 @@ tcs_placements_charges_de_dup_pacc_post_adj <- tcs_placements_charges_de_dup_pac
   distinct(unique_placement_id, .keep_all=TRUE) ### now we are back to original cleaned N
 ```
 
-<br><br>
 
-### NEED TO ADD ADJUDICATION/NON-ADJUDICATION TO FILTER OUT `current_charge_classification` VALUES WITH NON-ADJUDICATION; UNTIL WE HEAR BACK FROM SCAO, I'M USING `charge_disposition` (THIS IS JUST A PLACEHOLDER -- WILL LIKELY NEED TO CHANGE!)
-```{r warning=FALSE, message=FALSE}
+```{r include=FALSE}
 table(tcs_placements_charges_de_dup$charge_disposition, useNA = 'always')
 ```
 
-<br><br>
 
-## Preliminary Descriptives (to share out)
+## Preliminary Descriptives 
 
 <br>
 
@@ -374,7 +292,7 @@ tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_ad
          place_type_clean%in%c("Detention")) %>% 
   summarise(`Sample N, Detention` = n_distinct(unique_placement_id[place_type_clean=="Detention"])) 
 
-tcs_placements_charges_de_dup_ind_place_grouped <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
+tcs_placements_charges_de_dup_ind_place_grouped_pre_detention <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
          !is.na(current_charge_classification_clean_factor)==TRUE,
          place_type_clean%in%c("Detention")) %>% 
@@ -385,9 +303,10 @@ tcs_placements_charges_de_dup_ind_place_grouped <- tcs_placements_charges_de_dup
   ungroup()
 
 ### print table via kableextra
-kable(tcs_placements_charges_de_dup_ind_place_grouped, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+
 ```
 
 <br><br>
@@ -420,6 +339,7 @@ tcs_placements_charges_dispo_to_placement_median_lag <- tcs_placements_charges_d
 kable(tcs_placements_charges_dispo_to_placement_median_lag, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+
 ```
 
 <br><br>
@@ -434,7 +354,7 @@ tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_post_a
             `Sample N, Residential` = n_distinct(unique_placement_id[place_type_clean=="Residential"]),
             `Sample N, MDHHS` = n_distinct(unique_placement_id[place_type_clean=="MDHHS"])) 
 
-tcs_placements_charges_de_dup_ind_place_grouped <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
+tcs_placements_charges_de_dup_ind_place_grouped_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
          !is.na(current_charge_classification_clean_factor)==TRUE,
          place_type_clean%in%c("Detention","Residential","MDHHS")) %>% 
@@ -449,9 +369,12 @@ tcs_placements_charges_de_dup_ind_place_grouped <- tcs_placements_charges_de_dup
   ungroup()
 
 ### print table via kableextra
-kable(tcs_placements_charges_de_dup_ind_place_grouped, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(tcs_placements_charges_de_dup_ind_place_grouped_post, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+
+
+
 ```
 
 <br><br>
@@ -505,7 +428,7 @@ detention_charge_over_time_table_denom <- tcs_placements_charges_de_dup_pacc_pre
             `2020` = n_distinct(unique_placement_id[place_year==2020])) 
 
 ### create detention table by charge
-detention_charge_over_time_table <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
+detention_charge_over_time_table_pre <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
  filter(place_year%in%c(2016,2017,2018,2019,2020),
          place_type_clean %in% c("Detention"),
         !is.na(current_charge_classification_clean_factor)==TRUE) %>%
@@ -525,9 +448,10 @@ detention_charge_over_time_table <- tcs_placements_charges_de_dup_pacc_pre_adj %
   ungroup() 
 
 ### print table via kableextra
-kable(detention_charge_over_time_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(detention_charge_over_time_table_pre, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+
 ```
 
 <br><br>
@@ -547,7 +471,7 @@ detention_charge_over_time_table_denom <- tcs_placements_charges_de_dup_pacc_pos
             `2020` = n_distinct(unique_placement_id[place_year==2020])) 
 
 ### create detention table by charge
-detention_charge_over_time_table <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
+detention_charge_over_time_table_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
  filter(place_year%in%c(2016,2017,2018,2019,2020),
          place_type_clean %in% c("Detention"),
         !is.na(current_charge_classification_clean_factor)==TRUE) %>%
@@ -567,7 +491,7 @@ detention_charge_over_time_table <- tcs_placements_charges_de_dup_pacc_post_adj 
   ungroup() 
 
 ### print table via kableextra
-kable(detention_charge_over_time_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(detention_charge_over_time_table_post, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
 ```
@@ -589,7 +513,7 @@ residential_mdhhs_charge_over_time_table_denom <- tcs_placements_charges_de_dup_
             `2020` = n_distinct(unique_placement_id[place_year==2020])) 
 
 ### create Residential/MDHHS table by charge
-residential_mdhhs_charge_over_time_table <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
+residential_mdhhs_charge_over_time_table_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
  filter(place_year%in%c(2016,2017,2018,2019,2020),
          place_type_clean %in% c("Residential","MDHHS"),
         !is.na(current_charge_classification_clean_factor)==TRUE) %>%
@@ -609,14 +533,16 @@ residential_mdhhs_charge_over_time_table <- tcs_placements_charges_de_dup_pacc_p
   ungroup() 
 
 ### print table via kableextra
-kable(residential_mdhhs_charge_over_time_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(residential_mdhhs_charge_over_time_table_post, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+
 ```
 
 <br><br>
 
-```{r echo=FALSE,warning=FALSE, message=FALSE}
+```{r include=FALSE}
+
 ### Calculate length of stay and create LOS buckets, PRE-ADJUDICATION
 
 ### calculate length of stay in two different ways:
@@ -686,7 +612,7 @@ tcs_placements_charges_de_dup_pacc_pre_adj %<>%
 ```
 
 
-```{r echo=FALSE,warning=FALSE, message=FALSE}
+```{r include=FALSE}
 ### Calculate length of stay and create LOS buckets, POST-ADJUDICATION
 
 
@@ -758,7 +684,7 @@ tcs_placements_charges_de_dup_pacc_post_adj %<>%
 
 ### PRE-ADJUDICATION Median LOS by Charge -- Detention, 2016-2018 (individual placements)
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_median_los <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
+tcs_placements_charges_median_los_detention_pre <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
   filter(case_year%in%c(2016,2017,2018),
          !is.na(current_charge_classification_clean_factor)==TRUE,
          place_type_clean=="Detention") %>% ### only looking at earlier years because we don't want to artificially deflate the median
@@ -769,16 +695,17 @@ tcs_placements_charges_median_los <- tcs_placements_charges_de_dup_pacc_pre_adj 
   ungroup()
 
 ### print table via kableextra
-kable(tcs_placements_charges_median_los, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(tcs_placements_charges_median_los_detention_pre, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+
 ```
 
 <br><br>
 
 ### POST-ADJUDICATION Median LOS by Charge -- Detention, Residential, and Treatment, 2016-2018 (individual placements)
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_median_los <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
+tcs_placements_charges_median_los_all_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
   filter(case_year%in%c(2016,2017,2018),
          !is.na(current_charge_classification_clean_factor)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
   distinct(unique_placement_id, .keep_all=TRUE) %>% 
@@ -792,237 +719,9 @@ tcs_placements_charges_median_los <- tcs_placements_charges_de_dup_pacc_post_adj
   ungroup()
 
 ### print table via kableextra
-kable(tcs_placements_charges_median_los, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(tcs_placements_charges_median_los_all_post, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
-```
-
-```{r eval=FALSE,include=FALSE,message=FALSE,warning=FALSE}
-### CCI
-cci_los_overall_denom <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin)==TRUE,
-         first_place_type_cci_mdhhs=="Child Caring Institution") %>% 
-  summarise(n_count = n_distinct(placement_unique_id))
-
-cci_los_overall_grouped <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin),
-         first_place_type_cci_mdhhs=="Child Caring Institution") %>% 
-    group_by(los_overall_all_included_grouped_bin) %>% 
-  summarise(n_count = round(n_distinct(placement_unique_id)/(cci_los_overall_denom$n_count), digits = 2))
-
-## use gather for line plot
-cci_los_overall_table <- cci_los_overall_grouped %>%
-  gather(year, value, `n_count`) %>% 
-  dplyr::rename(los_bins = los_overall_all_included_grouped_bin) %>% 
-  mutate(facility = 'CCI')
-
-### MDHHS
-mdhhs_los_overall_denom <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin)==TRUE,
-         first_place_type_cci_mdhhs=="MDHHS Training School") %>% 
-  summarise(n_count = n_distinct(placement_unique_id))
-
-mdhhs_los_overall_grouped <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin),
-         first_place_type_cci_mdhhs=="MDHHS Training School") %>% 
-    group_by(los_overall_all_included_grouped_bin) %>% 
-  summarise(n_count = round(n_distinct(placement_unique_id)/(mdhhs_los_overall_denom$n_count), digits = 2))
-
-## use gather for line plot
-mdhhs_los_overall_table <- mdhhs_los_overall_grouped %>%
-  gather(year, value, `n_count`) %>% 
-  dplyr::rename(los_bins = los_overall_all_included_grouped_bin) %>% 
-  mutate(facility = 'MDHHS')
-
-
-mdhhs_los_overall_table_missing_row <- tribble(
-  ~`los_bins`,   ~`year`, ~`value`,    ~`facility`,                 
-  "Less than 1 Month", "n_count",as.numeric(0.00), "MDHHS") 
-
-## combine
-combined_los_overall_table_detention_only <- rbind(cci_los_overall_table,mdhhs_los_overall_table,mdhhs_los_overall_table_missing_row) 
-  
-mdhhs_cci_mdhhs_los_bins_2016_2017 <- ggplot(data = combined_los_overall_table_detention_only,
-            mapping = aes(x = los_bins, y = value, fill = forcats::fct_rev(los_bins))) + 
-  geom_bar(position = "dodge", stat = "identity") +
-  scale_fill_manual(values = rev(c("#d6df23","#007392","#eeed90","#0db4e4","#315c15"))) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
-                                           max(.65))) +
-  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
-    theme(axis.text.x = element_text(size = 10, face="bold"),
-       axis.ticks.length = unit(0, "cm"),
-        strip.placement="outside",
-        strip.text.x=element_text(angle=180, hjust=1, face="bold", size=11,
-                              margin=margin(r=10))) +
-    labs(y = NULL, x = NULL,
-      caption = NULL,
-      title = NULL,
-      subtitle = NULL,
-      fill = NULL) +
-    coord_flip() +
-    facet_grid(forcats::fct_rev(facility) ~ ., scales="free_y", space="free_y", switch="y") +
-  guides(fill = FALSE) + 
-  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
-                  position = position_dodge(width = .9),
-                  direction = 'x',
-                  hjust = 0.75,
-                  label.padding = 0.1,
-                  box.padding = 0.1,
-                  fill = "white",
-                  color = "gray40",
-                  segment.color = NA,
-                  fontface = "bold",
-                  na.rm = TRUE,
-                  show.legend = FALSE)
-
-mdhhs_cci_mdhhs_los_bins_2016_2017
-
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_cci_mdhhs_los_bins_2016_2017.png", mdhhs_cci_mdhhs_los_bins_2016_2017, width = 8, height = 6)
-```
-
-```{r eval=FALSE,include=FALSE,message=FALSE,warning=FALSE}
-### export tcs_placements_charges_de_dup_pacc
-write_rds(tcs_placements_charges_de_dup_pacc,"C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Analytic Files\\tcs_placements_charges_de_dup_pacc.rds")
-```
-
-<br><br>
-
-## Basic Sample Descriptives, Charge Data
-
-<br>
-
-#### Charge N's: Unique Placements by Placement/Facility Type, cases filed 2016-2020 
-
-Note: Charges in this table are individual charges, not grouped by individual or case. These are not yet linked to placements -- this is simply the universe of charges in the TCS data. 
-
-```{r echo=FALSE,message=FALSE,warning=FALSE}
-# From TCS code book: Current Offense Classification - C/Civil Infraction, F/Felony, M/Misdemeanor, S/Statute, H/High Misdemeanor, O/Other, V/Civil-Other, R/Ordinance, Z/Notice for Advisories
-tcs_charges_de_dup %<>%
-  mutate(current_offense_classification_clean = case_when(
-    current_offense_classification %in% c("C","V") ~ 1,
-    current_offense_classification == "F" ~ 2,
-    current_offense_classification == "M" ~ 3,
-    current_offense_classification == "S" ~ 4,
-    current_offense_classification == "H" ~ 5,
-    current_offense_classification == "R" ~ 6,
-    current_offense_classification == "Z" ~ 7,
-    current_offense_classification == "O" ~ 8,
-    TRUE ~ as.numeric(NA)),
-    current_offense_classification_clean = factor(current_offense_classification_clean,
-         levels = c(1,2,3,4,5,6,7,8),
-         labels = c("Civil","Felony", "Misdemeanor","Statute","High Misdemeanor","Ordinance","Notice for Advisories","Other"))) %>% ### use factor function to assign labels to values)
-  mutate(unique_charge_id = paste0(id,case_id))
-
-### create overall placement count denominator for % in cross-tabs
-unique_charge_id_n <- n_distinct(tcs_charges_de_dup$unique_charge_id[!is.na(tcs_charges_de_dup$current_offense_classification_clean)==TRUE])
-
-### all -- grouped by placement type
-tcs_charge_type <- tcs_charges_de_dup %>% 
-  distinct(unique_charge_id,.keep_all = TRUE) %>% 
-  filter(!is.na(current_offense_classification_clean)==TRUE,
-         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
-  group_by(current_offense_classification_clean) %>% 
-  summarise(`Unique Count (N)` = n_distinct(unique_charge_id),
-            `Percent of Total (%)` = round(n_distinct(unique_charge_id)/unique_charge_id_n*100, digits = 2)) %>% 
-  dplyr::rename(`Charge Classification` = current_offense_classification_clean) %>% 
-  mutate(`Charge Classification` = as.character(`Charge Classification`))
-
-### all -- overall
-tcs_charge_type_overall <- tcs_charges_de_dup %>% 
-  distinct(unique_charge_id,.keep_all = TRUE) %>% 
-  filter(!is.na(current_offense_classification_clean)==TRUE,
-         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
-  summarise(`Unique Count (N)` = n_distinct(unique_charge_id),
-            `Percent of Total (%)` = round(n_distinct(unique_charge_id)/unique_charge_id_n*100, digits = 2)) %>% 
-  dplyr::mutate(`Charge Classification` = "Overall") 
-
-### combine tables for kable
-tcs_charge_type_table <- rbind(tcs_charge_type,tcs_charge_type_overall)
-
-### print table via kableextra
-kable(tcs_charge_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
-```
-
-<br><br>
-
-## Codebook
-
-<br>
-
-#### Charges
-```{r echo=FALSE,message=FALSE,warning=FALSE}
-### import variable labels from 'CSG_TCS_DataDictionary FINAL'
-charges_labels <- readxl::read_xlsx(file.path(
-    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
-  .name_repair = make_clean_names,
-  sheet ="Charges", range = "B2:C106") %>% 
-  mutate(data_column = make_clean_names(data_column))
-
-### get descriptive statistics and select those of interest
-charges_descriptives <- tcs_charges_de_dup %>% 
-  describe(.,
-           check = FALSE) %>% 
-  mutate(data_column = row.names(.)) %>% 
-  as_tibble() %>% 
-  select(data_column,"n","min","max","mean") %>% 
-  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
-
-### add stats to label 
-charges_codebook <- left_join(charges_descriptives,charges_labels,by="data_column") %>% 
-  select(data_column,tcs_definition=definition,everything())
-
-### print table via kableextra
-kable(charges_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                row_label_position = "l") 
-```
-
-<br><br>
-
-#### Placements
-```{r echo=FALSE,message=FALSE,warning=FALSE}
-### import variable labels from 'CSG_TCS_DataDictionary FINAL'
-placements_labels <- readxl::read_xlsx(file.path(
-    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
-  .name_repair = make_clean_names,
-  sheet ="Placements", range = "B2:C52") %>% 
-  mutate(data_column = make_clean_names(data_column))
-
-### get descriptive statistics and select those of interest
-placements_descriptives <- tcs_placements_de_dup %>% 
-  describe(.,
-           check = FALSE) %>% 
-  mutate(data_column = row.names(.)) %>% 
-  as_tibble() %>% 
-  select(data_column,"n","min","max","mean") %>% 
-  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
-
-### add stats to label 
-placements_codebook <- left_join(placements_descriptives,placements_labels,by="data_column") %>% 
-  select(data_column,tcs_definition=definition,everything())
-
-### print table via kableextra
-kable(placements_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                row_label_position = "l") 
-```
-
-<br><br>
-
-## TCS Placement Data Diagram 
-
-Below is a data diagram outlining the pertinent TCS data files we have received and processed -- noting the primary keys in each to de-duplicate as well as the columns used to join the relational data together. Only entire file is displayed for placements because of size constraints (too many columns, too little room)
-
-<br>
-
-```{r echo=FALSE, out.width = '100%'}
-knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping_charges.png")
 ```
 
 <br><br>
