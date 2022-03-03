@@ -1,43 +1,22 @@
 ---
-title: "mi_tcs_county_placement_cleaning"
+title: "tcs_county_data_placement_charge_county_level_viz"
 author: "Andrew Byrum"
-date: "2/8/2022"
+date: "3/3/2022"
 output: html_document
 ---
 
-# {.tabset .tabset-fade .tabset-pills}
+#  {.tabset .tabset-fade .tabset-pills}
 ```{r include=FALSE}
 ### call libraries
 library(easypackages)
 libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
-````
+```
 
-## Analysis Outline and Outstanding Questions
-
-**Placement Counts**
-
-* Placement/Detention count by charge category -- both by individual placement and by 'case' over time
-
-*And if time permits:*
-
-*	By race/ethnicity (RRI using MI population juvenile race/ethnicity data for pertinent counties)
-
-* Length of Stay (Mean and median length of stay by charge category -- both by individual placement and by 'case' over time; also by race/ethnicity (with t-tests for statistical significance of differences in means))
-
-**Outstanding Questions**
-
-* How do we code technical violations? How should we account for technical violations as possible reason for post-adjudication detention in particular, given the time between adjudication and placement that we're seeing? Also, based on definition of 'case' we were provided, a new offense results in a new case -- so can we assume all violation data we have for a given case is solely non-offense technical violation data? Or not?
-
-* Are we confident that placements deemed "detention" are in fact detention and not longer-term residential/treatment placements at facilities that have both detention and residential services? 
-
-<br><br>
-
+```{r include=FALSE}
 ## Preliminary Cleaning
 
-<br>
 
 ### 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
-```{r message=FALSE,warning=FALSE}
 ### set sharepoint path using csgjcr::csg_sp_path function
 sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
 
@@ -82,31 +61,9 @@ tcs_mandatory_events <- read_xlsx(
   mutate(across(where(is.POSIXct), as.Date))
 ```
 
-<br><br>
-
+```{r include=FALSE}
 ### 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', and 'placements' and merge together
 
-
-From Laura, Tanya, and Susan Svoboda:
-
-For TCS, all data sets may be linked with CourtType, Year, TCSReportCourtJCL, CaseYear, CaseID and CaseType.
-
-Juvenile/Name Number is available on the following data sets:
-Cases – JuvenileNbr identifies the juvenile for the TCSreportCourtname.  Some of the FJ casetypes do not have a JuvenileNbr because a juvenile record is not created in adult cases.  In adult cases(in this data set only FJ), if the case had a prior juvenile record the JuvenileNbr will be populated indicated a reoffending juvenile in adult court.
-
-Charges – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case.
-
-MandatoryEvents –   NameNbr identifies the juvenile; 1 to many mandatory events will relate to a case.  Key events, legal status set, adjudication, disposition events etc.
-
-Placements - NameNbr identifies the juvenile; 0 to many placement events will relate to a case.  Would recommend using the PCN events and not use ORD.  Courts should be using PCN events.
-Financials –   PayorPatyNameNbr identifies the payor party.  This may or may not be the juvenile; 0 to many financial records will relate to a case.  Link to cases and use Juvenile Nbr, if needed.
-Program Results – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 0 to many program results can relate to a case.
-Sentencing – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed.
-
-
-<br>
-
-```{r message=FALSE,warning=FALSE}
 ######################################
 #### cases
 ######################################
@@ -124,9 +81,7 @@ tcs_cases_de_dup <- tcs_cases %>%
 ### 99% of dropped cases are due to 'caseload_action' -- multiple entries as different stages of case are entered 
 ```
 
-<br><br>
-
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ######################################
 #### charges
 ######################################
@@ -143,9 +98,7 @@ tcs_charges_de_dup <- tcs_charges %>%
          case_year = as.numeric(case_year)) ### recode status offense (from laura's team: "If you filter on CurrentOffense by 712A – that should give you the status offenses.")
 ```
 
-<br><br>
-
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 ######################################
 #### placements
 ######################################
@@ -168,12 +121,10 @@ tcs_placements_de_dup <- tcs_placements %>%
   ungroup()
 ```
 
-<br><br>
-
+```{r include=FALSE}
 ### 3. Start Cleaning w/ Placements (this will serve as base file -- as we interested only in those for whom there is placement data)
 
-Here are our groupings for placement type:
-```{r message=FALSE,warning=FALSE}
+# Here are our groupings for placement type:
 placement_detention <- c("Calhoun County Juvenile Home","DETENTION","I-Child Vill Det (Not VC Disp)","NON-SECURE DETENTION","OTHER COUNTY DETENTION","Regional Detention Center","SECURE DETENTION")
 
 placement_residential_non_mdhhs <- c("I-Boot Camp","I-CFY Ranch","I-Child Vill Residential","I-Child Vill Secure","I-Private Placement","Independent Placement","INSTITUTIONAL/RESIDENTIAL CARE","PRIVATE AGENCY/INSTITUTION","RESIDENTIAL PLACEMENT","CALHOUN TREATMENT CENTER","Residential Treatment Program")
@@ -189,10 +140,9 @@ placement_jail <- c("I-Oakland County Jail","Jail")
 placement_foster_shelter <- c("Foster Care-Court Supervision","Foster Care-FIA Supervision","PLACED IN FOSTER CARE-DHS SPRV","PLACED IN FOSTER CARE-CRT SPRV","Shelter Home")
 ```
 
-<br><br>
+```{r include=FALSE}
+#Create clean placement categories 
 
-Create clean placement categories 
-```{r message=FALSE,warning=FALSE}
 tcs_placements_de_dup %<>%
   mutate(place_type_clean = 
            case_when(
@@ -211,18 +161,16 @@ tcs_placements_de_dup %<>%
   mutate(place_year = year(ymd(place_begin_date))) ### create year of placement to use instead of year that case was filed -- to align with Becky's Kalamazoo data when used and to be consistent throughout
 ```
 
-<br><br>
-
+```{r include=FALSE}
 ### Join `Cases` to `Placements` to obtain adjudication date for parsing placements into pre- and post-adjudication groups (to analyze w/ most serious charge and most serious adjudicated charge, respectively)
-```{r warning=FALSE, message=FALSE}
+
 ### we don't successfully join for 62 placement records out of 10,325 total (0.6%; 99.4% match rate here)
 tcs_placements_cases_de_dup <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,by=c("juvenile_nbr","case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type"))
 ```
 
-<br>
-
+```{r include=FALSE}
 ### Join `Charges` to `Placements` to analyze placements counts and LOS by most severe charge (adjudicated charge)
-```{r warning=FALSE, message=FALSE}
+
 ### we don't successfully join for 885 placement records out of 10,325 total (8.5%; 91.5% match rate here) 
 ### we also add duplicates -- as more than one charge may link to an individual placement (we will eventually de-dup by most severe adjudicated charge associated with a placement)
 ### for this analysis, we need charge data so merging via inner_join to keep only records with both placement and charge data
@@ -235,12 +183,11 @@ tcs_placements_charges_de_dup <- inner_join(tcs_placements_cases_de_dup,tcs_char
          after_adjudication_flag = ifelse(place_begin_date>=adjudication_dt,1,0))
 ```
 
-<br><br>
-
+```{r include=FALSE}
 ### Flag charges with adjudication before de-duping by placement/charge
 
-(NOT COUNTING THE FOLLOWING AS ADJUDICATION: CHANGE VENUE/TRANSFER, CONSENT CALENDAR PLAN, CONSENT CALENDAR PROBATION, , DISMISS INCOMPETENT, DISMISSED, DISMISSED INCOMPETENT,DIVERTED, FOUND GUILTY, FOUND NOT COMPETENT, INACTIVE INCOMPETENT, NOT AUTHORIZED, NOT CHARGED, NOT FOUND W/IN PROVISION CODE, NOT GUILTY, REMAND, TRANSFER, TRADITIONAL WAIVER)
-```{r message=FALSE,warning=FALSE}
+# (NOT COUNTING THE FOLLOWING AS ADJUDICATION: CHANGE VENUE/TRANSFER, CONSENT CALENDAR PLAN, CONSENT CALENDAR PROBATION, , DISMISS INCOMPETENT, DISMISSED, DISMISSED INCOMPETENT,DIVERTED, FOUND GUILTY, FOUND NOT COMPETENT, INACTIVE INCOMPETENT, NOT AUTHORIZED, NOT CHARGED, NOT FOUND W/IN PROVISION CODE, NOT GUILTY, REMAND, TRANSFER, TRADITIONAL WAIVER)
+
 charge_adjudicated <- c("ADMITTED ALLEGATIONS","DESIGNATED GRANTED","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE")
 
 ### keep only charges with adjudication
@@ -253,10 +200,9 @@ tcs_placements_charges_de_dup %<>%
          current_offense = str_replace_all(current_offense,"[:punct:]", "")) ### remove all punctuation from current_offense and make all lower case -- for merge with current_offense from Emily's lookup table
 ```
 
-<br><br>
-
+```{r include=FALSE}
 ### Read in PACC code lookup table that Emily created
-```{r message=FALSE,warning=FALSE}
+
 ### set sharepoint path using csgjcr::csg_sp_path function
 sharepoint_pacc_lookup_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/JDW/")
 
@@ -292,7 +238,7 @@ jdw_msp_charge_pacc_code_current_lookup <- rbind(jdw_charge_pacc_code_lookup_cur
   distinct(current_offense,.keep_all=TRUE)
 ```
 
-```{r message=FALSE,warning=FALSE}
+```{r include=FALSE}
 # ### import pacc lookup -- jdw -- original offense
 # jdw_charge_pacc_code_lookup_original <- readr::read_csv(
 #   file.path(
@@ -324,10 +270,11 @@ jdw_msp_charge_pacc_code_current_lookup <- rbind(jdw_charge_pacc_code_lookup_cur
 # jdw_msp_charge_pacc_code_original_lookup <- rbind(jdw_charge_pacc_code_lookup_original,msp_charge_pacc_code_lookup_original) %>% 
 #   distinct(original_offense,.keep_all=TRUE)
 ```
-<br><br>
 
+```{r include=FALSE}
 ### Join jdw_charge_pacc_code_lookup to tcs_placements_charges_de_dup
-```{r message=FALSE,warning=FALSE}
+
+
 ### no corresponding pacc lookup values for 189 records (189/13955; 1.4%) -- current offense
 tcs_placements_charges_de_dup_pacc <- left_join(tcs_placements_charges_de_dup,jdw_msp_charge_pacc_code_current_lookup,by="current_offense") 
 
@@ -335,10 +282,9 @@ tcs_placements_charges_de_dup_pacc <- left_join(tcs_placements_charges_de_dup,jd
 # tcs_placements_charges_de_dup_pacc <- left_join(tcs_placements_charges_de_dup_pacc,jdw_msp_charge_pacc_code_original_lookup,by="original_offense") 
 ```
 
-<br><br>
+```{r include=FALSE}
+#Recode several missing offenses based on Emily's notes:
 
-Recode several missing offenses based on Emily's notes:
-```{r warning=FALSE, message=FALSE}
 recode_to_status <- c("712a2d4","722755","ord code 26267")
 
 recode_to_misd_non_person <- c("7503675","7505354a1","ord code 2649","ord code 26492","ord code 2651","ord code 2654","7527971a","9999999904","local orddisorderly")
@@ -348,10 +294,9 @@ recode_to_misd_person <- c("75081a1")
 recode_to_felony_person <- c("roassault police")
 ```
 
-<br>
-
+```{r include=FALSE}
 ### De-dup by `placement` and `case` -- create flag to designate the most serious charge associated with that unique `placement`/`case`
-```{r warning=FALSE, message=FALSE}
+
 # From TCS code book: Current Offense Classification - C/Civil Infraction, F/Felony, M/Misdemeanor, S/Statute, H/High Misdemeanor, O/Other, V/Civil-Other, R/Ordinance, Z/Notice for Advisories
 
 ### pre-adjudication
@@ -390,13 +335,9 @@ tcs_placements_charges_de_dup_pacc_post_adj <- tcs_placements_charges_de_dup_pac
   distinct(unique_placement_id, .keep_all=TRUE) ### now we are back to original cleaned N
 ```
 
-<br><br>
-
-## Preliminary Descriptives, County-level
-
 <br>
 
-### Visuals
+## County-level Descriptives, Visuals
 
 ```{r include=FALSE}
 ### set theme and font size
@@ -426,6 +367,7 @@ new_pal_blue_two_other <- c("#007392","#d6df23")
 #### PRE-ADJUDICATION DETENTION: % of detentions for which most serious charge is a status offense, 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 7 counties here; Ionia doesn't appear to have any pre-adjudication detention records and mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### recode offense category into felony, misd, and status
 tcs_placements_charges_de_dup_pacc_pre_adj %<>%
@@ -510,6 +452,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
 #### PRE-ADJUDICATION DETENTION: % of detentions for which most serious charge is a misdemeanor offense, 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 7 counties here; Ionia doesn't appear to have any pre-adjudication detention records and mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
@@ -581,6 +524,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
 #### PRE-ADJUDICATION DETENTION: detentions by most serious charge (%), 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 7 counties here; Ionia doesn't appear to have any pre-adjudication detention records and mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
@@ -653,6 +597,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes
 
 # ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\Iowa Revocation Reduction\\Work Products\\Presentations\\r_viz\\supervision_status_by_district_2020.png", supervision_status_by_district_2020, width = 9, height = 6.5) 
 ```
+
 <br><br>
 
 #### **Post-Adjudication**
@@ -662,6 +607,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes
 #### POST-ADJUDICATION DETENTION: % of detentions for which most serious charge is a status offense, 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 8 counties here; mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### recode offense category into felony, misd, and status
 tcs_placements_charges_de_dup_pacc_post_adj %<>%
@@ -746,6 +692,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
 #### POST-ADJUDICATION DETENTION: % of detentions for which most serious charge is a misdemeanor offense, 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 8 counties here; mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
@@ -817,6 +764,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
 #### POST-ADJUDICATION DETENTION: detentions by most serious charge (%), 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 8 counties here; mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
@@ -892,7 +840,9 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes
 
 <br><br>
 
-### Tables
+## County-level Descriptives, Tables
+
+Note: All %'s are within county in the following tables.
 
 <br>
 
@@ -903,6 +853,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes
 #### PRE-ADJUDICATION DETENTION: Individual Placements by Charge Classification: Counts and Percentages, 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 7 counties here; Ionia doesn't appear to have any pre-adjudication detention records and mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
@@ -939,6 +890,7 @@ kable(tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, format.args
 #### POST-ADJUDICATION: Individual Placements by Charge Classification: Counts and Percentages, 2016-2020
 
 BY COUNTY FOR INTERNAL DISCUSSION (only 8 counties here; mackinac doesn't distinguish detention from residential in placement coding)
+
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
   filter(place_year%in%c(2016,2017,2018,2019,2020),
@@ -966,698 +918,24 @@ kable(tcs_placements_charges_de_dup_ind_place_grouped_post_detention, format.arg
                  row_label_position = "l") 
 ```
 
-
 <br><br>
 
-## Preliminary Descriptives, Overall
-
-
-### PRE-ADJUDICATION DETENTION: Individual Placements by Charge Classification: Counts and Percentages, 2016-2020
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean%in%c("Detention")) %>% 
-  summarise(`Sample N, Detention` = n_distinct(unique_placement_id[place_type_clean=="Detention"])) 
-
-tcs_placements_charges_de_dup_ind_place_grouped_pre_detention <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean%in%c("Detention")) %>% 
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`Detention (N)` = n_distinct(unique_placement_id[place_type_clean=="Detention"]), 
-            `Detention (%)` = round(n_distinct(unique_placement_id[place_type_clean=="Detention"])/tcs_placements_charges_de_dup_denom$`Sample N, Detention`*100, digits = 1)) %>% 
-  ungroup()
-
-### print table via kableextra
-kable(tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-```
-
-<br><br>
-
-### POST-ADJUDICATION: Median and Mean Time between Disposition Date and Placement Start Date, 2016-2020
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_de_dup_pacc_post_adj_disp_place_diff <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
-  filter(!is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean%in%c("Detention")) %>% 
-  # select(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,adjudication_dt,dispo_date,current_charge_classification_clean_factor,place_begin_date,place_end_date,place_type_clean) %>%
-  mutate(dispo_date = mdy(dispo_date)) %>% 
-  mutate(dispo_placement_diff = time_length(difftime(place_begin_date,dispo_date), unit = 'days')) %>% 
-  filter(dispo_placement_diff>=0) ### remove negative time differences which is likely a coding error (n=1)
-
-tcs_placements_charges_dispo_to_placement_median_lag <- tcs_placements_charges_de_dup_pacc_post_adj_disp_place_diff %>% 
-  filter(case_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean%in%c("Detention")) %>% 
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`Detention (Median Days)` = round(median(dispo_placement_diff[place_type_clean=="Detention"], na.rm = TRUE), digits = 0),
-            `Detention (Mean Days)` = round(mean(dispo_placement_diff[place_type_clean=="Detention"], na.rm = TRUE), digits = 0),
-            # `Residential (Median Days)` = round(median(dispo_placement_diff[place_type_clean=="Residential"], na.rm = TRUE), digits = 0), 
-            # `Residential (Mean Days)` = round(mean(dispo_placement_diff[place_type_clean=="Residential"], na.rm = TRUE), digits = 0), 
-            # 
-            # `MDHHS (Median Days)` = round(median(dispo_placement_diff[place_type_clean=="MDHHS"], na.rm = TRUE), digits = 0),
-            # `MDHHS (Mean Days)` = round(mean(dispo_placement_diff[place_type_clean=="MDHHS"], na.rm = TRUE), digits = 0)
-            ) %>% 
-  ungroup()
-
-### print table via kableextra
-kable(tcs_placements_charges_dispo_to_placement_median_lag, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-
-```
-
-<br><br>
-
-### POST-ADJUDICATION: Individual Placements by Charge Classification: Counts and Percentages, 2016-2020
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean%in%c("Detention")) %>% 
-  summarise(`Sample N, Detention` = n_distinct(unique_placement_id[place_type_clean=="Detention"])) 
-
-tcs_placements_charges_de_dup_ind_place_grouped_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean%in%c("Detention")) %>% 
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`Detention (N)` = n_distinct(unique_placement_id[place_type_clean=="Detention"]), 
-            `Detention (%)` = round(n_distinct(unique_placement_id[place_type_clean=="Detention"])/tcs_placements_charges_de_dup_denom$`Sample N, Detention`*100, digits = 1)) %>% 
-  ungroup()
-
-### print table via kableextra
-kable(tcs_placements_charges_de_dup_ind_place_grouped_post, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-
-```
-
-<br><br>
-
-```{r eval=FALSE,include=FALSE}
-tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE) %>% 
-  summarise(`Sample N` = n_distinct(unique_placement_id)) 
-
-tcs_placements_charges_off_level_missing <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE) %>% 
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(charge_disp_code,charge_disposition) %>% 
-  summarise(`N` = n_distinct(unique_placement_id), 
-            `%` = round(n_distinct(unique_placement_id)/tcs_placements_charges_de_dup_denom$`Sample N`*100, digits = 1)) %>% 
-  ungroup()
-
-### print table via kableextra
-kable(tcs_placements_charges_off_level_missing, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-
-
-### write out
-
-### set sharepoint path using csgjcr::csg_sp_path function
-sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Data Questions/TCS/Charges/")
-
-### import cases
-openxlsx::write.xlsx(tcs_placements_charges_off_level_missing,
-  file.path(
-    sharepoint_tcs_data_path, "tcs_placements_disp_codes.xlsx"))
-  
-```
-
-
-### PRE-ADJUDICATION DETENTION: Individual Placements by Charge Classification and Year: Counts and Percentages, 2016-2020
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-### create detention table by charge -- this is denominator for percentages
-detention_charge_over_time_table_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
- filter(place_year%in%c(2016,2017,2018,2019,2020),
-         place_type_clean %in% c("Detention"),
-        !is.na(current_charge_classification_clean_factor)==TRUE) %>%
-  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
-            `2016` = n_distinct(unique_placement_id[place_year==2016]),
-            `2017` = n_distinct(unique_placement_id[place_year==2017]),
-            `2018` = n_distinct(unique_placement_id[place_year==2018]),
-            `2019` = n_distinct(unique_placement_id[place_year==2019]),
-            `2020` = n_distinct(unique_placement_id[place_year==2020])) 
-
-### create detention table by charge
-detention_charge_over_time_table_pre <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
- filter(place_year%in%c(2016,2017,2018,2019,2020),
-         place_type_clean %in% c("Detention"),
-        !is.na(current_charge_classification_clean_factor)==TRUE) %>%
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
-            `All Cases (%)` = round(n_distinct(unique_placement_id)/detention_charge_over_time_table_denom$`All Cases (N)`*100,digits=1),
-            `2016 (N)` = n_distinct(unique_placement_id[place_year==2016]),
-            `2016 (%)` = round(n_distinct(unique_placement_id[place_year==2016])/detention_charge_over_time_table_denom$`2016`*100,digits=1),
-            `2017 (N)` = n_distinct(unique_placement_id[place_year==2017]),
-            `2017 (%)` = round(n_distinct(unique_placement_id[place_year==2017])/detention_charge_over_time_table_denom$`2017`*100,digits=1),
-            `2018 (N)` = n_distinct(unique_placement_id[place_year==2018]),
-            `2018 (%)` = round(n_distinct(unique_placement_id[place_year==2018])/detention_charge_over_time_table_denom$`2018`*100,digits=1),
-            `2019 (N)` = n_distinct(unique_placement_id[place_year==2019]),
-            `2019 (%)` = round(n_distinct(unique_placement_id[place_year==2019])/detention_charge_over_time_table_denom$`2019`*100,digits=1),
-            `2020 (N)` = n_distinct(unique_placement_id[place_year==2020]),
-            `2020 (%)` = round(n_distinct(unique_placement_id[place_year==2020])/detention_charge_over_time_table_denom$`2020`*100,digits=1)) %>% 
-  ungroup() 
-
-### print table via kableextra
-kable(detention_charge_over_time_table_pre, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-
-```
-
-<br><br>
-
-### POST-ADJUDICATION DETENTION: Individual Placements by Charge Classification and Year: Counts and Percentages, 2016-2020
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-### create detention table by charge -- this is denominator for percentages
-detention_charge_over_time_table_denom <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
- filter(place_year%in%c(2016,2017,2018,2019,2020),
-         place_type_clean %in% c("Detention"),
-        !is.na(current_charge_classification_clean_factor)==TRUE) %>%
-  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
-            `2016` = n_distinct(unique_placement_id[place_year==2016]),
-            `2017` = n_distinct(unique_placement_id[place_year==2017]),
-            `2018` = n_distinct(unique_placement_id[place_year==2018]),
-            `2019` = n_distinct(unique_placement_id[place_year==2019]),
-            `2020` = n_distinct(unique_placement_id[place_year==2020])) 
-
-### create detention table by charge
-detention_charge_over_time_table_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
- filter(place_year%in%c(2016,2017,2018,2019,2020),
-         place_type_clean %in% c("Detention"),
-        !is.na(current_charge_classification_clean_factor)==TRUE) %>%
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
-            `All Cases (%)` = round(n_distinct(unique_placement_id)/detention_charge_over_time_table_denom$`All Cases (N)`*100,digits=1),
-            `2016 (N)` = n_distinct(unique_placement_id[place_year==2016]),
-            `2016 (%)` = round(n_distinct(unique_placement_id[place_year==2016])/detention_charge_over_time_table_denom$`2016`*100,digits=1),
-            `2017 (N)` = n_distinct(unique_placement_id[place_year==2017]),
-            `2017 (%)` = round(n_distinct(unique_placement_id[place_year==2017])/detention_charge_over_time_table_denom$`2017`*100,digits=1),
-            `2018 (N)` = n_distinct(unique_placement_id[place_year==2018]),
-            `2018 (%)` = round(n_distinct(unique_placement_id[place_year==2018])/detention_charge_over_time_table_denom$`2018`*100,digits=1),
-            `2019 (N)` = n_distinct(unique_placement_id[place_year==2019]),
-            `2019 (%)` = round(n_distinct(unique_placement_id[place_year==2019])/detention_charge_over_time_table_denom$`2019`*100,digits=1),
-            `2020 (N)` = n_distinct(unique_placement_id[place_year==2020]),
-            `2020 (%)` = round(n_distinct(unique_placement_id[place_year==2020])/detention_charge_over_time_table_denom$`2020`*100,digits=1)) %>% 
-  ungroup() 
-
-### print table via kableextra
-kable(detention_charge_over_time_table_post, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-```
-
-<br><br>
-
-### POST-ADJUDICATION Residential/MDHHS -- Individual Placements by Charge Classification and Year: Counts and Percentages, 2016-2020
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-### create Residential/MDHHS table by charge -- this is denominator for percentages
-residential_mdhhs_charge_over_time_table_denom <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
- filter(place_year%in%c(2016,2017,2018,2019,2020),
-         place_type_clean %in% c("Residential","MDHHS"),
-        !is.na(current_charge_classification_clean_factor)==TRUE) %>%
-  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
-            `2016` = n_distinct(unique_placement_id[place_year==2016]),
-            `2017` = n_distinct(unique_placement_id[place_year==2017]),
-            `2018` = n_distinct(unique_placement_id[place_year==2018]),
-            `2019` = n_distinct(unique_placement_id[place_year==2019]),
-            `2020` = n_distinct(unique_placement_id[place_year==2020])) 
-
-### create Residential/MDHHS table by charge
-residential_mdhhs_charge_over_time_table_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
- filter(place_year%in%c(2016,2017,2018,2019,2020),
-         place_type_clean %in% c("Residential","MDHHS"),
-        !is.na(current_charge_classification_clean_factor)==TRUE) %>%
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`All Cases (N)` = n_distinct(unique_placement_id),
-            `All Cases (%)` = round(n_distinct(unique_placement_id)/residential_mdhhs_charge_over_time_table_denom$`All Cases (N)`*100,digits=1),
-            `2016 (N)` = n_distinct(unique_placement_id[place_year==2016]),
-            `2016 (%)` = round(n_distinct(unique_placement_id[place_year==2016])/residential_mdhhs_charge_over_time_table_denom$`2016`*100,digits=1),
-            `2017 (N)` = n_distinct(unique_placement_id[place_year==2017]),
-            `2017 (%)` = round(n_distinct(unique_placement_id[place_year==2017])/residential_mdhhs_charge_over_time_table_denom$`2017`*100,digits=1),
-            `2018 (N)` = n_distinct(unique_placement_id[place_year==2018]),
-            `2018 (%)` = round(n_distinct(unique_placement_id[place_year==2018])/residential_mdhhs_charge_over_time_table_denom$`2018`*100,digits=1),
-            `2019 (N)` = n_distinct(unique_placement_id[place_year==2019]),
-            `2019 (%)` = round(n_distinct(unique_placement_id[place_year==2019])/residential_mdhhs_charge_over_time_table_denom$`2019`*100,digits=1),
-            `2020 (N)` = n_distinct(unique_placement_id[place_year==2020]),
-            `2020 (%)` = round(n_distinct(unique_placement_id[place_year==2020])/residential_mdhhs_charge_over_time_table_denom$`2020`*100,digits=1)) %>% 
-  ungroup() 
-
-### print table via kableextra
-kable(residential_mdhhs_charge_over_time_table_post, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-
-```
-
-<br><br>
-
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-### Calculate length of stay and create LOS buckets, PRE-ADJUDICATION
-
-### calculate length of stay in two different ways:
-# los with everything counted 
-# los split into placement type buckets -- making sure to recode '0' as NA so as to not bring down mean LOS when youth was never actually placed somewhere
-tcs_placements_charges_de_dup_pacc_pre_adj %<>%
-  group_by(unique_case_id) %>% ### group by case
-  mutate(case_first_place_date = min(place_begin_date),
-         case_last_place_date = max(place_end_date)) %>%
-  ungroup() %>% 
-  mutate(unique_placement_los = time_length(difftime(place_end_date, place_begin_date), unit = 'days'),
-         los_unique_placement_detention_only = ifelse(place_type_clean=="Detention",unique_placement_los,NA),
-         los_unique_placement_residential_non_mdhhs_only = ifelse(place_type_clean=="Residential",unique_placement_los,NA),
-         los_unique_placement_mdhhs_only = ifelse(place_type_clean=="MDHHS",unique_placement_los,NA)) %>% 
-  group_by(unique_case_id) %>% 
-  mutate(los_case_overall_all_included = sum(unique_placement_los),
-         los_case_overall_all_included = ifelse(los_case_overall_all_included==0,NA,los_case_overall_all_included),
-         los_overall_detention_only = sum(los_unique_placement_detention_only),
-         los_overall_detention_only = ifelse(los_overall_detention_only==0,NA,los_overall_detention_only),
-         los_overall_residential_only = sum(los_unique_placement_residential_non_mdhhs_only),
-         los_overall_residential_only = ifelse(los_overall_residential_only==0,NA,los_overall_residential_only),
-         los_overall_mdhhs_only = sum(los_unique_placement_mdhhs_only),
-         los_overall_mdhhs_only = ifelse(los_overall_mdhhs_only==0,NA,los_overall_mdhhs_only)) %>% 
-  ungroup()
-
-### create grouped los bins for detention
-### mirror becky's approach with the kalamazoo analysis
-### recode LOS_placement (1/3=1 "1-3 days") (4/7=2 "4-7 days") (8/14=3 "8-14 days") (15/30=4 "15-30 days") (31/90=5 "1-3 months") (91/max=6 ">3 months"), gen (placement_buckets)
-tcs_placements_charges_de_dup_pacc_pre_adj %<>%
-  mutate(los_unique_placement_detention_only_grouped_bin = case_when(
-    los_unique_placement_detention_only<3 & los_unique_placement_detention_only!=0 ~ 1,
-    los_unique_placement_detention_only>=3 & los_unique_placement_detention_only<7 ~ 2,
-    los_unique_placement_detention_only>=7 & los_unique_placement_detention_only<15 ~ 3,
-    los_unique_placement_detention_only>=15 & los_unique_placement_detention_only<=30 ~ 4,
-    los_unique_placement_detention_only>=30 & los_unique_placement_detention_only<=90 ~ 5,
-    los_unique_placement_detention_only>90 ~ 6,
-    TRUE ~ as.numeric(NA)),
-    los_unique_placement_detention_only_grouped_bin = factor(los_unique_placement_detention_only_grouped_bin,
-         levels = c(1,2,3,4,5,6),
-         labels = c("1 to 3 Days", "3 to 7 Days", "7 to 14 Days","15 to 30 Days","30 to 90 Days","90 Days+"))) ### use factor function to assign labels to values
-
-### create grouped los bins for residential placement
-tcs_placements_charges_de_dup_pacc_pre_adj %<>%
-  mutate(los_unique_placement_residential_only_grouped_bin = case_when(
-    los_unique_placement_residential_non_mdhhs_only<32 & los_unique_placement_residential_non_mdhhs_only!=0 ~ 1,
-    los_unique_placement_residential_non_mdhhs_only>=32 & los_unique_placement_residential_non_mdhhs_only<92 ~ 2,
-    los_unique_placement_residential_non_mdhhs_only>=92 & los_unique_placement_residential_non_mdhhs_only<=275 ~ 3,
-    los_unique_placement_residential_non_mdhhs_only>=275 & los_unique_placement_residential_non_mdhhs_only<=549 ~ 4,
-    los_unique_placement_residential_non_mdhhs_only>549 ~ 5,
-    TRUE ~ as.numeric(NA)),
-    los_unique_placement_residential_only_grouped_bin = factor(los_unique_placement_residential_only_grouped_bin,
-         levels = c(1,2,3,4,5),
-         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
-
-### create grouped los bins for mdhhs placement
-tcs_placements_charges_de_dup_pacc_pre_adj %<>%
-  mutate(los_unique_placement_mdhhs_only_grouped_bin = case_when(
-    los_unique_placement_mdhhs_only<32 & los_unique_placement_mdhhs_only!=0 ~ 1,
-    los_unique_placement_mdhhs_only>=32 & los_unique_placement_mdhhs_only<92 ~ 2,
-    los_unique_placement_mdhhs_only>=92 & los_unique_placement_mdhhs_only<=275 ~ 3,
-    los_unique_placement_mdhhs_only>=275 & los_unique_placement_mdhhs_only<=549 ~ 4,
-    los_unique_placement_mdhhs_only>549 ~ 5,
-    TRUE ~ as.numeric(NA)),
-    los_unique_placement_mdhhs_only_grouped_bin = factor(los_unique_placement_mdhhs_only_grouped_bin,
-         levels = c(1,2,3,4,5),
-         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
-```
-
-
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-### Calculate length of stay and create LOS buckets, POST-ADJUDICATION
-
-
-### calculate length of stay in two different ways:
-# los with everything counted 
-# los split into placement type buckets -- making sure to recode '0' as NA so as to not bring down mean LOS when youth was never actually placed somewhere
-tcs_placements_charges_de_dup_pacc_post_adj %<>%
-  group_by(unique_case_id) %>% ### group by case
-  mutate(case_first_place_date = min(place_begin_date),
-         case_last_place_date = max(place_end_date)) %>%
-  ungroup() %>% 
-  mutate(unique_placement_los = time_length(difftime(place_end_date, place_begin_date), unit = 'days'),
-         los_unique_placement_detention_only = ifelse(place_type_clean=="Detention",unique_placement_los,NA),
-         los_unique_placement_residential_non_mdhhs_only = ifelse(place_type_clean=="Residential",unique_placement_los,NA),
-         los_unique_placement_mdhhs_only = ifelse(place_type_clean=="MDHHS",unique_placement_los,NA)) %>% 
-  group_by(unique_case_id) %>% 
-  mutate(los_case_overall_all_included = sum(unique_placement_los),
-         los_case_overall_all_included = ifelse(los_case_overall_all_included==0,NA,los_case_overall_all_included),
-         los_overall_detention_only = sum(los_unique_placement_detention_only),
-         los_overall_detention_only = ifelse(los_overall_detention_only==0,NA,los_overall_detention_only),
-         los_overall_residential_only = sum(los_unique_placement_residential_non_mdhhs_only),
-         los_overall_residential_only = ifelse(los_overall_residential_only==0,NA,los_overall_residential_only),
-         los_overall_mdhhs_only = sum(los_unique_placement_mdhhs_only),
-         los_overall_mdhhs_only = ifelse(los_overall_mdhhs_only==0,NA,los_overall_mdhhs_only)) %>% 
-  ungroup()
-
-### create grouped los bins for detention
-### mirror becky's approach with the kalamazoo analysis
-### recode LOS_placement (1/3=1 "1-3 days") (4/7=2 "4-7 days") (8/14=3 "8-14 days") (15/30=4 "15-30 days") (31/90=5 "1-3 months") (91/max=6 ">3 months"), gen (placement_buckets)
-tcs_placements_charges_de_dup_pacc_post_adj %<>%
-  mutate(los_unique_placement_detention_only_grouped_bin = case_when(
-    los_unique_placement_detention_only<3 & los_unique_placement_detention_only!=0 ~ 1,
-    los_unique_placement_detention_only>=3 & los_unique_placement_detention_only<7 ~ 2,
-    los_unique_placement_detention_only>=7 & los_unique_placement_detention_only<15 ~ 3,
-    los_unique_placement_detention_only>=15 & los_unique_placement_detention_only<=30 ~ 4,
-    los_unique_placement_detention_only>=30 & los_unique_placement_detention_only<=90 ~ 5,
-    los_unique_placement_detention_only>90 ~ 6,
-    TRUE ~ as.numeric(NA)),
-    los_unique_placement_detention_only_grouped_bin = factor(los_unique_placement_detention_only_grouped_bin,
-         levels = c(1,2,3,4,5,6),
-         labels = c("1 to 3 Days", "3 to 7 Days", "7 to 14 Days","15 to 30 Days","30 to 90 Days","90 Days+"))) ### use factor function to assign labels to values
-
-### create grouped los bins for residential placement
-tcs_placements_charges_de_dup_pacc_post_adj %<>%
-  mutate(los_unique_placement_residential_only_grouped_bin = case_when(
-    los_unique_placement_residential_non_mdhhs_only<32 & los_unique_placement_residential_non_mdhhs_only!=0 ~ 1,
-    los_unique_placement_residential_non_mdhhs_only>=32 & los_unique_placement_residential_non_mdhhs_only<92 ~ 2,
-    los_unique_placement_residential_non_mdhhs_only>=92 & los_unique_placement_residential_non_mdhhs_only<=275 ~ 3,
-    los_unique_placement_residential_non_mdhhs_only>=275 & los_unique_placement_residential_non_mdhhs_only<=549 ~ 4,
-    los_unique_placement_residential_non_mdhhs_only>549 ~ 5,
-    TRUE ~ as.numeric(NA)),
-    los_unique_placement_residential_only_grouped_bin = factor(los_unique_placement_residential_only_grouped_bin,
-         levels = c(1,2,3,4,5),
-         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
-
-### create grouped los bins for mdhhs placement
-tcs_placements_charges_de_dup_pacc_post_adj %<>%
-  mutate(los_unique_placement_mdhhs_only_grouped_bin = case_when(
-    los_unique_placement_mdhhs_only<32 & los_unique_placement_mdhhs_only!=0 ~ 1,
-    los_unique_placement_mdhhs_only>=32 & los_unique_placement_mdhhs_only<92 ~ 2,
-    los_unique_placement_mdhhs_only>=92 & los_unique_placement_mdhhs_only<=275 ~ 3,
-    los_unique_placement_mdhhs_only>=275 & los_unique_placement_mdhhs_only<=549 ~ 4,
-    los_unique_placement_mdhhs_only>549 ~ 5,
-    TRUE ~ as.numeric(NA)),
-    los_unique_placement_mdhhs_only_grouped_bin = factor(los_unique_placement_mdhhs_only_grouped_bin,
-         levels = c(1,2,3,4,5),
-         labels = c("Less than 1 Month", "1 to 3 Months","3 to 9 Months","9 to 18 Months","18 Months+"))) ### use factor function to assign labels to values
-```
-
-### PRE-ADJUDICATION Median LOS by Charge -- Detention, 2016-2018 (individual placements)
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_median_los_detention_pre <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(case_year%in%c(2016,2017,2018),
-         !is.na(current_charge_classification_clean_factor)==TRUE,
-         place_type_clean=="Detention") %>% ### only looking at earlier years because we don't want to artificially deflate the median
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`Detention (Sample N)` = n_distinct(unique_placement_id[!is.na(los_unique_placement_detention_only)==TRUE & los_unique_placement_detention_only>-1]),
-            `Detention (Days)` = round(median(los_unique_placement_detention_only[los_unique_placement_detention_only>-1], na.rm = TRUE), digits = 0)) %>% 
-  ungroup()
-
-### print table via kableextra
-kable(tcs_placements_charges_median_los_detention_pre, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-
-```
-
-<br><br>
-
-### POST-ADJUDICATION Median LOS by Charge -- Detention, Residential, and Treatment, 2016-2018 (individual placements)
-```{r echo=FALSE,warning=FALSE, message=FALSE}
-tcs_placements_charges_median_los_all_post <- tcs_placements_charges_de_dup_pacc_post_adj %>% 
-  filter(case_year%in%c(2016,2017,2018),
-         !is.na(current_charge_classification_clean_factor)==TRUE) %>% ### only looking at earlier years because we don't want to artificially deflate the median
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(current_charge_classification_clean_factor) %>% 
-  summarise(`Detention (Sample N)` = n_distinct(unique_placement_id[!is.na(los_unique_placement_detention_only)==TRUE & los_unique_placement_detention_only>-1]),
-            `Detention (Days)` = round(median(los_unique_placement_detention_only[los_unique_placement_detention_only>-1], na.rm = TRUE), digits = 0), 
-            `Residential (Sample N)` = n_distinct(unique_placement_id[!is.na(los_unique_placement_residential_non_mdhhs_only)==TRUE]),
-            `Residential (Days)` = round(median(los_unique_placement_residential_non_mdhhs_only, na.rm = TRUE), digits = 0), 
-            `MDHHS (Sample N)` = n_distinct(unique_placement_id[!is.na(los_unique_placement_mdhhs_only)==TRUE]),
-            `MDHHS (Days)` = round(median(los_unique_placement_mdhhs_only, na.rm = TRUE), digits = 0)) %>% 
-  ungroup()
-
-### print table via kableextra
-kable(tcs_placements_charges_median_los_all_post, format.args = list(big.mark = ","), align=rep('c')) %>%
-   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                 row_label_position = "l") 
-```
-
-```{r eval=FALSE,include=FALSE,message=FALSE,warning=FALSE}
-### CCI
-cci_los_overall_denom <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin)==TRUE,
-         first_place_type_cci_mdhhs=="Child Caring Institution") %>% 
-  summarise(n_count = n_distinct(placement_unique_id))
-
-cci_los_overall_grouped <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin),
-         first_place_type_cci_mdhhs=="Child Caring Institution") %>% 
-    group_by(los_overall_all_included_grouped_bin) %>% 
-  summarise(n_count = round(n_distinct(placement_unique_id)/(cci_los_overall_denom$n_count), digits = 2))
-
-## use gather for line plot
-cci_los_overall_table <- cci_los_overall_grouped %>%
-  gather(year, value, `n_count`) %>% 
-  dplyr::rename(los_bins = los_overall_all_included_grouped_bin) %>% 
-  mutate(facility = 'CCI')
-
-### MDHHS
-mdhhs_los_overall_denom <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin)==TRUE,
-         first_place_type_cci_mdhhs=="MDHHS Training School") %>% 
-  summarise(n_count = n_distinct(placement_unique_id))
-
-mdhhs_los_overall_grouped <- jj_assessments_placement_legal_status_clean_has_cci_mdhhs %>% 
-    filter(placement_episode_start_year %in% c(2016,2017),
-         !is.na(los_overall_all_included_grouped_bin),
-         first_place_type_cci_mdhhs=="MDHHS Training School") %>% 
-    group_by(los_overall_all_included_grouped_bin) %>% 
-  summarise(n_count = round(n_distinct(placement_unique_id)/(mdhhs_los_overall_denom$n_count), digits = 2))
-
-## use gather for line plot
-mdhhs_los_overall_table <- mdhhs_los_overall_grouped %>%
-  gather(year, value, `n_count`) %>% 
-  dplyr::rename(los_bins = los_overall_all_included_grouped_bin) %>% 
-  mutate(facility = 'MDHHS')
-
-
-mdhhs_los_overall_table_missing_row <- tribble(
-  ~`los_bins`,   ~`year`, ~`value`,    ~`facility`,                 
-  "Less than 1 Month", "n_count",as.numeric(0.00), "MDHHS") 
-
-## combine
-combined_los_overall_table_detention_only <- rbind(cci_los_overall_table,mdhhs_los_overall_table,mdhhs_los_overall_table_missing_row) 
-  
-mdhhs_cci_mdhhs_los_bins_2016_2017 <- ggplot(data = combined_los_overall_table_detention_only,
-            mapping = aes(x = los_bins, y = value, fill = forcats::fct_rev(los_bins))) + 
-  geom_bar(position = "dodge", stat = "identity") +
-  scale_fill_manual(values = rev(c("#d6df23","#007392","#eeed90","#0db4e4","#315c15"))) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits=c(min(0), 
-                                           max(.65))) +
-  scale_x_discrete(labels = scales::wrap_format(18),limits = rev) +
-    theme(axis.text.x = element_text(size = 10, face="bold"),
-       axis.ticks.length = unit(0, "cm"),
-        strip.placement="outside",
-        strip.text.x=element_text(angle=180, hjust=1, face="bold", size=11,
-                              margin=margin(r=10))) +
-    labs(y = NULL, x = NULL,
-      caption = NULL,
-      title = NULL,
-      subtitle = NULL,
-      fill = NULL) +
-    coord_flip() +
-    facet_grid(forcats::fct_rev(facility) ~ ., scales="free_y", space="free_y", switch="y") +
-  guides(fill = FALSE) + 
-  geom_label_repel(aes(label = scales::percent(as.numeric(value), accuracy = 1), group = forcats::fct_rev(los_bins)),
-                  position = position_dodge(width = .9),
-                  direction = 'x',
-                  hjust = 0.75,
-                  label.padding = 0.1,
-                  box.padding = 0.1,
-                  fill = "white",
-                  color = "gray40",
-                  segment.color = NA,
-                  fontface = "bold",
-                  na.rm = TRUE,
-                  show.legend = FALSE)
-
-mdhhs_cci_mdhhs_los_bins_2016_2017
-
-ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\mdhhs_cci_mdhhs_los_bins_2016_2017.png", mdhhs_cci_mdhhs_los_bins_2016_2017, width = 8, height = 6)
-```
-
-```{r eval=FALSE,include=FALSE,message=FALSE,warning=FALSE}
-### data tables to write out: tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,tcs_placements_charges_dispo_to_placement_median_lag,tcs_placements_charges_de_dup_ind_place_grouped_post,detention_charge_over_time_table_pre,detention_charge_over_time_table_post,residential_mdhhs_charge_over_time_table_post,tcs_placements_charges_median_los_detention_pre,tcs_placements_charges_median_los_all_post
-
-C:\Users\abyrum\The Council of State Governments\JC Research - Documents\JC Research - JJ_Michigan - JJ_Michigan\Work Products\Court Data\TCS\Charge Analysis
-
-### write out all tables to excel 
-library(xlsx)
-write.xlsx(dataframe1, file="C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\Court Data\\TCS\\Charge Analysis\\tcs_placement_charge_analysis_2_24_2022.xlsx", sheetName="sheet1", row.names=FALSE)
-write.xlsx(dataframe2, file="filename.xlsx", sheetName="sheet2", append=TRUE, row.names=FALSE)
-```
-
-<br><br>
-
-## Basic Sample Descriptives, Charge Data
+## Outstanding Questions/Next Steps
 
 <br>
 
-#### Charge N's: Unique Placements by Placement/Facility Type, cases filed 2016-2020 
+**Outstanding Questions**
 
-Note: Charges in this table are individual charges, not grouped by individual or case. These are not yet linked to placements -- this is simply the universe of charges in the TCS data. 
+* How do we code technical violations? How should we account for technical violations as possible reason for post-adjudication detention in particular, given the time between adjudication and placement that we're seeing? Also, based on definition of 'case' we were provided, a new offense results in a new case -- so can we assume all violation data we have for a given case is solely non-offense technical violation data? Or not?
 
-```{r echo=FALSE,message=FALSE,warning=FALSE}
-# From TCS code book: Current Offense Classification - C/Civil Infraction, F/Felony, M/Misdemeanor, S/Statute, H/High Misdemeanor, O/Other, V/Civil-Other, R/Ordinance, Z/Notice for Advisories
-tcs_charges_de_dup %<>%
-  mutate(current_offense_classification_clean = case_when(
-    current_offense_classification %in% c("C","V") ~ 1,
-    current_offense_classification == "F" ~ 2,
-    current_offense_classification == "M" ~ 3,
-    current_offense_classification == "S" ~ 4,
-    current_offense_classification == "H" ~ 5,
-    current_offense_classification == "R" ~ 6,
-    current_offense_classification == "Z" ~ 7,
-    current_offense_classification == "O" ~ 8,
-    TRUE ~ as.numeric(NA)),
-    current_offense_classification_clean = factor(current_offense_classification_clean,
-         levels = c(1,2,3,4,5,6,7,8),
-         labels = c("Civil","Felony", "Misdemeanor","Statute","High Misdemeanor","Ordinance","Notice for Advisories","Other"))) %>% ### use factor function to assign labels to values)
-  mutate(unique_charge_id = paste0(id,case_id))
-
-### create overall placement count denominator for % in cross-tabs
-unique_charge_id_n <- n_distinct(tcs_charges_de_dup$unique_charge_id[!is.na(tcs_charges_de_dup$current_offense_classification_clean)==TRUE])
-
-### all -- grouped by placement type
-tcs_charge_type <- tcs_charges_de_dup %>% 
-  distinct(unique_charge_id,.keep_all = TRUE) %>% 
-  filter(!is.na(current_offense_classification_clean)==TRUE,
-         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
-  group_by(current_offense_classification_clean) %>% 
-  summarise(`Unique Count (N)` = n_distinct(unique_charge_id),
-            `Percent of Total (%)` = round(n_distinct(unique_charge_id)/unique_charge_id_n*100, digits = 2)) %>% 
-  dplyr::rename(`Charge Classification` = current_offense_classification_clean) %>% 
-  mutate(`Charge Classification` = as.character(`Charge Classification`))
-
-### all -- overall
-tcs_charge_type_overall <- tcs_charges_de_dup %>% 
-  distinct(unique_charge_id,.keep_all = TRUE) %>% 
-  filter(!is.na(current_offense_classification_clean)==TRUE,
-         case_year%in%c(2016,2017,2018,2019,2020)) %>% 
-  summarise(`Unique Count (N)` = n_distinct(unique_charge_id),
-            `Percent of Total (%)` = round(n_distinct(unique_charge_id)/unique_charge_id_n*100, digits = 2)) %>% 
-  dplyr::mutate(`Charge Classification` = "Overall") 
-
-### combine tables for kable
-tcs_charge_type_table <- rbind(tcs_charge_type,tcs_charge_type_overall)
-
-### print table via kableextra
-kable(tcs_charge_type_table, format.args = list(big.mark = ","), align=rep('c')) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
-```
-
-<br><br>
-
-## Codebook
+* Are we confident that placements deemed "detention" are in fact detention and not longer-term residential/treatment placements at facilities that have both detention and residential services?
 
 <br>
 
-#### Charges
-```{r echo=FALSE,message=FALSE,warning=FALSE}
-### import variable labels from 'CSG_TCS_DataDictionary FINAL'
-charges_labels <- readxl::read_xlsx(file.path(
-    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
-  .name_repair = make_clean_names,
-  sheet ="Charges", range = "B2:C106") %>% 
-  mutate(data_column = make_clean_names(data_column))
+**Next Steps**
 
-### get descriptive statistics and select those of interest
-charges_descriptives <- tcs_charges_de_dup %>% 
-  describe(.,
-           check = FALSE) %>% 
-  mutate(data_column = row.names(.)) %>% 
-  as_tibble() %>% 
-  select(data_column,"n","min","max","mean") %>% 
-  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+* Confirm definition of `adjudication` versus `disposition` for construction of pre- and post-adjudication/disposition buckets
 
-### add stats to label 
-charges_codebook <- left_join(charges_descriptives,charges_labels,by="data_column") %>% 
-  select(data_column,tcs_definition=definition,everything())
-
-### print table via kableextra
-kable(charges_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                row_label_position = "l") 
-```
-
-<br><br>
-
-#### Placements
-```{r echo=FALSE,message=FALSE,warning=FALSE}
-### import variable labels from 'CSG_TCS_DataDictionary FINAL'
-placements_labels <- readxl::read_xlsx(file.path(
-    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
-  .name_repair = make_clean_names,
-  sheet ="Placements", range = "B2:C52") %>% 
-  mutate(data_column = make_clean_names(data_column))
-
-### get descriptive statistics and select those of interest
-placements_descriptives <- tcs_placements_de_dup %>% 
-  describe(.,
-           check = FALSE) %>% 
-  mutate(data_column = row.names(.)) %>% 
-  as_tibble() %>% 
-  select(data_column,"n","min","max","mean") %>% 
-  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
-
-### add stats to label 
-placements_codebook <- left_join(placements_descriptives,placements_labels,by="data_column") %>% 
-  select(data_column,tcs_definition=definition,everything())
-
-### print table via kableextra
-kable(placements_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
-                row_label_position = "l") 
-```
-
-<br><br>
-
-## TCS Placement Data Diagram 
-
-Below is a data diagram outlining the pertinent TCS data files we have received and processed -- noting the primary keys in each to de-duplicate as well as the columns used to join the relational data together. Only entire file is displayed for placements because of size constraints (too many columns, too little room)
-
-<br>
-
-```{r echo=FALSE, out.width = '100%'}
-knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping_charges.png")
-```
-
-<br><br>
-
-## Questions out to SCAO
-
-*Preliminary Decisions to Confirm*
-
-•	Our goal is to analyze the TCS placement data by charge type, specifically the most serious charge for which a youth is adjudicated per case:
-
-Currently we are joining the charges data file to the placement data file by merging on the following fields based on your previous advice: ‘CourtType’, ‘Year’, ‘TCSReportCourtJCL’, ‘CaseYear’, ‘CaseID’, and ‘CaseType’
-
-We are selecting the most serious charge for which a youth is adjudicated per case using the ‘current_offense_classification’ field – and selecting the most serious classification within a single case
-
-*Questions*
-
-•	What is the difference between ‘current offense’ and ‘original offense’?
-
-•	It appears as though the charges data file is unique by the field, ‘ID’, along with ‘CaseID’. Is this a unique identifier of each charge? The data dictionary notes that this field is the "Unique ID for the record"
-
-•	What is the best way to determine if a youth was or was not adjudicated for a particular charge? The fields, ‘charge_disposition’ and ‘charge_disp_code’ appear to indicate this. Is that correct? And if so, is there a codebook available for ‘charge_disp_code’ to help us determine if a youth was adjudicated or not for a given charge?
-
-Here are the codes I am seeing in the data: AAL, CCP, CHV, DGT, DINC, DIS, DIV, DVT, FNC, FPC, GTD, GTY, INA, INAC, INAR, NAP, NCH, NFPC, NGTY, NOC, PLG, RMD, TRS, TTC, TWAV
+* Separate out consent calendar cases
 
 <br><br>
