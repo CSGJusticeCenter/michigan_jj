@@ -1,0 +1,657 @@
+---
+title: "mi_tcs_data_codebook"
+author: "Andrew Byrum"
+date: "3/1/2022"
+output: html_document
+---
+
+# {.tabset .tabset-fade .tabset-pills}
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
+````
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', and 'placements'
+
+
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
+
+### import cases
+tcs_cases <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Cases_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import charges
+tcs_charges <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Charges_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import dispositions
+tcs_dispositions <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_DispositionsPerCharge_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import placements
+tcs_placements <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Placements_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import mandatory events (to explore legal status)
+tcs_mandatory_events <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_MandatoryEvents_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import financials
+tcs_financials <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Financials_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import program results
+tcs_program_results <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_ProgramResults_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import sentencing
+tcs_sentencing <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Sentencings_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+```
+
+<br>
+
+## Data Pull/File Description
+
+
+**Sample Description: Cases filed in 2016, 2017, 2018, 2019, and 2020 with the following case types: DL, DJ, TL, FJ**
+
+
+*Case Type Definition:* 
+
+* Designated Juvenile Offenses [DJ]. All juvenile offenses designated by the prosecutor or court to be heard in the family division of circuit court in the same manner as an adult criminal case is heard in the criminal division of the circuit court.
+
+* Delinquency Proceedings [DL]. All delinquency proceedings initiated by petition under the juvenile code or initiated by Uniform Law Citation for various minor offenses not in the Motor Vehicle Code.
+
+* Juvenile Felonies [FJ]. Juvenile offenses committed by juveniles and waived to the criminal division of the circuit court under MCR 3.950. Includes life offenses committed by juveniles in which the prosecuting attorney has authorized the filing of a criminal complaint and warrant under MCR 6.907 instead of proceeding in the family division of the circuit court.
+
+* Traffic and Local Ordinance [TL]. All traffic and local ordinance issued on a Uniform Law Citation under the Motor Vehicle Code or local corresponding ordinance.
+
+<br>
+
+*Additional Sample Filters, from SCAO:*
+
+* "If a case was disposed by Diversion/Not Authorized, the case is marked as D for public status and excluded."
+
+* "If the word diverted or diversion appeared in the program result long description AND THERE IS NO PETITION AUTHORIZATION DATE, the case is excluded."
+
+* "If an event on a case indicates that the case was diverted AND THERE IS NO PETITION AUTHORIZATION DATE, the case is excluded."
+
+<br>
+
+**File Description (from SCAO data dictionary)**
+
+
+*Cases:* "The main case information filed with the court."
+
+*Charges:* "Offenses entered on criminal and neglect abuse case types."
+
+*Dispositions:* "The method of disposition on charges and parties."
+
+*Financials:* "The filing fees and/or assessments associated to the case and payor party."
+
+*Mandatory Events:* "Important reporting type events on the case, e.g. Bench Warrant Issued, Matters taken under advisement, Permanency Achieved, etc."
+
+*Placements:* "Juvenile and minor children placed out of the home information."
+
+*Program Results:* "Programs parties are ordered into and results/outcomes of hearings."
+
+*Sentencing:* "Sentencing results on adult criminal FJ and DJ sentencings."
+
+<br><br>
+
+## Key Variable Subset
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+######################################
+#### cases
+######################################
+
+# de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
+tcs_cases_de_dup <- tcs_cases %>%
+  filter(!is.na(juvenile_nbr)==TRUE,
+         juvenile_nbr!=0, ### there are a handful of records where juvenile_nbr=0; appears to be data error as the records don't consistently share other identifying info like dates and county
+         !is.na(case_number)==TRUE) %>% 
+  dplyr::rename(case_id = case_number) %>%  ### there are a number of important primary keys which have different names across the files -- here case_id and case_number are the same ID (naming all 'case_id')
+  distinct(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,adjudication_dt,.keep_all=TRUE) %>% 
+  mutate(year = as.numeric(year),
+         case_year = as.numeric(year))
+
+### 99% of dropped cases are due to 'caseload_action' -- multiple entries as different stages of case are entered 
+```
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+######################################
+#### charges
+######################################
+
+# de-dup charges file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped
+# note: there are 1,288 records in the cases df that do not appear at all in the charges df; note from Laura and team: "no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case."
+# case_number identifies case and id uniquely identifies charge within case  
+tcs_charges_de_dup <- tcs_charges %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(id)==TRUE) %>% 
+  distinct(id,case_id,.keep_all = TRUE) %>% 
+  mutate(current_charge_classification_clean = ifelse(str_starts(current_offense,"712A"),"Status",current_offense_classification),
+         year = as.numeric(year),
+         case_year = as.numeric(case_year)) ### recode status offense (from laura's team: "If you filter on CurrentOffense by 712A – that should give you the status offenses.")
+```
+
+```{r include=FALSE,warning=FALSE, message=FALSE}
+### Join `Cases` to `charges` to obtain adjudication date for parsing placements into pre- and post-adjudication groups (to analyze w/ most serious charge and most serious adjudicated charge, respectively)
+
+tcs_cases_charges_raw <- inner_join(tcs_cases_de_dup,tcs_charges_de_dup,by=c("case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type")) %>% 
+  select(juvenile_nbr,case_id,case_type,county=county.x,defendant_race,defendant_gender,defendant_age_at_filing,case_file_dt=case_file_dt.x,offense_date,current_offense,current_description,current_offense_classification_scao_provided=current_offense_classification,charge_disposition,adjudication_dt,dispo_date)
+```
+
+**Codebook**
+
+<br>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### disable scientific notation
+options(scipen=999)
+
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+cases_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Cases", range = "B2:C110") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+charges_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Charges", range = "B2:C106") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+cases_charges_labels_append <- rbind(cases_labels,charges_labels)
+
+### get descriptive statistics and select those of interest
+tcs_cases_charges_raw_descriptives <- tcs_cases_charges_raw %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n", "min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+cases_charges_codebook <- left_join(tcs_cases_charges_raw_descriptives,cases_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything()) %>% 
+  as.data.frame() %>% 
+  mutate(data_count = count(tcs_cases_charges_raw),
+         missing_count = data_count - n,
+         missing_percent = round((missing_count/data_count)*100, digits = 1)) %>% 
+  select(data_column,"n","missing_percent","min","max","mean")
+
+### print table via kableextra
+kable(cases_charges_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+**Cross Tabs**
+
+<br>
+
+```{r include=FALSE,message=FALSE,warning=FALSE}
+options(max.print = 100)
+```
+
+<br>
+
+### case_type (case type)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$case_type)
+```
+
+<br>
+
+### county 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$county)
+```
+
+<br>
+
+### defendant_race 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$defendant_race)
+```
+
+<br>
+
+### defendant_gender 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$defendant_gender)
+```
+
+<br>
+
+### defendant_age_at_filing 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$defendant_age_at_filing)
+```
+
+<br>
+
+### case_file_dt 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$case_file_dt)
+```
+
+<br>
+
+### offense_date 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$offense_date)
+```
+
+<br>
+
+### current_offense (offense code) 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$current_offense)
+```
+
+<br>
+
+### current_description (offense description)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$current_description)
+```
+
+<br>
+
+### current_offense_classification_scao_provided (SCAO provided offense grouping; not grouping from Emily's lookup table) 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$current_offense_classification_scao_provided)
+```
+
+
+```{r include=FALSE}
+### keep only charges with adjudication
+tcs_cases_charges_raw %<>% 
+  mutate(current_offense = str_to_lower(current_offense),
+         current_offense = str_replace_all(current_offense,"[:punct:]", "")) ### remove all punctuation from current_offense and make all lower case -- for merge with current_offense from Emily's lookup table
+```
+
+```{r include=FALSE}
+### Read in PACC code lookup table that Emily created
+
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_pacc_lookup_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/JDW/")
+
+### import pacc lookup -- jdw -- current offense
+jdw_charge_pacc_code_lookup_current <- readr::read_csv(
+  file.path(
+    sharepoint_pacc_lookup_data_path, "JDWOffCodes_as_csv_abyrum.csv")) %>% 
+  clean_names() %>% 
+  dplyr::rename(category = category,
+                offcode_combined = offcode_combined,
+                off_level = off_level,
+                severity = severity) %>% 
+  mutate(current_offense = str_to_lower(offcode_combined),
+         current_offense = str_replace_all(current_offense,"[:punct:]", "")) %>%  ### remove all punctuation from offcode_combined and make all lower case -- current_offense field has minimal punctuation (will remove all punctuation, as well)
+  distinct(current_offense,.keep_all=TRUE) ### some duplicate offenses based on multiple entries with varying punctuation placements
+
+### import pacc lookup -- msp -- current offense
+msp_charge_pacc_code_lookup_current <- readr::read_csv(
+  file.path(
+    sharepoint_pacc_lookup_data_path, "MSPOffCodes_as_csv_abyrum.csv")) %>% 
+  clean_names() %>% 
+  rename(offcode_combined = disposedcode,
+         off_level = desposeddegreefelonymisdeme,
+         category = off_cat,
+         severity = severity) %>% 
+  select(-disposeddescription) %>% 
+  mutate(current_offense = str_to_lower(offcode_combined),
+         current_offense = str_replace_all(current_offense,"[:punct:]", "")) %>%  ### remove all punctuation from offcode_combined and make all lower case -- current_offense field has minimal punctuation (will remove all punctuation, as well)
+  distinct(current_offense,.keep_all=TRUE) ### some duplicate offenses based on multiple entries with varying punctuation placements
+
+### stack msp and jdw lookups
+jdw_msp_charge_pacc_code_current_lookup <- rbind(jdw_charge_pacc_code_lookup_current,msp_charge_pacc_code_lookup_current) %>% 
+  distinct(current_offense,.keep_all=TRUE)
+```
+
+```{r include=FALSE}
+### Join jdw_charge_pacc_code_lookup to tcs_placements_charges_de_dup
+
+### no corresponding pacc lookup values for 189 records (189/13955; 1.4%) -- current offense
+tcs_cases_charges_raw <- left_join(tcs_cases_charges_raw,jdw_msp_charge_pacc_code_current_lookup,by="current_offense") 
+
+# ### NOT USING ORIGINAL OFFENSE -- 2400+ RECORDS HAVE 'PENDING' WHICH OBVIOUSLY DOESN'T MATCH AND LEAVES US WITH TOO MUCH MISSINGNESS HERE
+# tcs_placements_charges_de_dup_pacc <- left_join(tcs_placements_charges_de_dup_pacc,jdw_msp_charge_pacc_code_original_lookup,by="original_offense") 
+```
+
+<br>
+
+### offense category (using Emily's lookup table w/ offense code join; not cleaned) 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$off_level,tcs_cases_charges_raw$category)
+```
+
+<br>
+
+### event_category_descr in events table (to create violation flag; coding question to SCAO outstanding)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_mandatory_events$event_category_descr)
+```
+
+<br>
+
+### charge_disposition (adjudication/disposition to determine guilty/not guilty as well as consent calendar)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$charge_disposition)
+```
+
+<br>
+
+### adjudication_dt 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$adjudication_dt)
+```
+
+<br>
+
+### dispo_date 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+table(tcs_cases_charges_raw$dispo_date)
+```
+
+<br><br>
+
+## Cases
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### disable scientific notation
+options(scipen=999)
+
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+cases_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Cases", range = "B2:C110") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+cases_descriptives <- tcs_cases %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+cases_codebook <- left_join(cases_descriptives,cases_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(cases_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Charges
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+charges_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Charges", range = "B2:C106") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+charges_descriptives <- tcs_charges %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+charges_codebook <- left_join(charges_descriptives,charges_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(charges_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Dispositions
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+dispositions_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Dispositions", range = "B2:C47") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+dispositions_descriptives <- tcs_dispositions %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+dispositions_codebook <- left_join(dispositions_descriptives,dispositions_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(dispositions_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Financials 
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+financials_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Financials", range = "B2:C65") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+financials_descriptives <- tcs_financials %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+financials_codebook <- left_join(financials_descriptives,financials_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(financials_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Mandatory Events
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+mandatory_events_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="MandatoryEvents", range = "B2:C50") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+mandatory_events_descriptives <- tcs_mandatory_events %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+mandatory_events_codebook <- left_join(mandatory_events_descriptives,mandatory_events_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(mandatory_events_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Placements
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+placements_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Placements", range = "B2:C52") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+placements_descriptives <- tcs_placements %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+placements_codebook <- left_join(placements_descriptives,placements_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(placements_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Program Results
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+program_results_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="ProgramResults", range = "B2:C40") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+program_results_descriptives <- tcs_program_results %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+program_results_codebook <- left_join(program_results_descriptives,program_results_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(program_results_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Sentencing
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### import variable labels from 'CSG_TCS_DataDictionary FINAL'
+sentencing_labels <- readxl::read_xlsx(file.path(
+    sharepoint_tcs_data_path, "CSG_TCS_DataDictionary FINAL.xlsx"),
+  .name_repair = make_clean_names,
+  sheet ="Sentencing", range = "B2:C56") %>% 
+  mutate(data_column = make_clean_names(data_column))
+
+### get descriptive statistics and select those of interest
+sentencing_descriptives <- tcs_sentencing %>% 
+  describe(.,
+           check = FALSE) %>% 
+  mutate(data_column = row.names(.)) %>% 
+  as_tibble() %>% 
+  select(data_column,"n","min","max","mean") %>% 
+  mutate(data_column = stringr::str_replace(data_column,"\\*",""))
+
+### add stats to label 
+sentencing_codebook <- left_join(sentencing_descriptives,sentencing_labels,by="data_column") %>% 
+  select(data_column,tcs_definition=definition,everything())
+
+### print table via kableextra
+kable(sentencing_codebook, format.args = list(big.mark = ","), align=rep('c')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                row_label_position = "l") 
+```
+
+<br><br>
+
+## Placement Data Diagram (prelim)
+
+Below is a data diagram outlining the pertinent TCS data files we have received and processed -- noting the primary keys in each to de-duplicate as well as the columns used to join the relational data together. Only entire file is displayed for placements because of size constraints (too many columns, too little room)
+
+<br>
+
+```{r echo=FALSE, out.width = '100%'}
+knitr::include_graphics("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Raw\\Courts\\JIS\\TCS\\Data Mapping\\michigan_tcs_placement_data_mapping.png")
+```
+
+<br><br>
+

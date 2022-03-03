@@ -151,7 +151,7 @@ tcs_placements_de_dup %<>%
          place_type_clean = factor(place_type_clean,
          levels = c(1,2,3,4,5,6,7),
          labels = c("Detention","Residential","MDHHS","Jail","AWOL","In Home/Aftercare","Foster Care/Shelter Home"))) %>% ### use factor function to assign labels to values
-  ungroup() %>% 
+  ungroup() %>%  
   mutate(place_year = year(ymd(place_begin_date))) ### create year of placement to use instead of year that case was filed -- to align with Becky's Kalamazoo data when used and to be consistent throughout
 ```
 
@@ -175,9 +175,10 @@ tcs_placements_charges_de_dup <- inner_join(tcs_placements_cases_de_dup,tcs_char
 
 
 ```{r include=FALSE}
-charge_adjudicated <- c("ADMITTED ALLEGATIONS","DESIGNATED GRANTED","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE","TRADITIONAL WAIVER")
+### coding here based on guidance from emily and becky
+charge_adjudicated <- c("ADMITTED ALLEGATIONS","DESIGNATED GRANTED","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE")
 
-### keep only charges with adjudication
+### create flag for charges with adjudication
 tcs_placements_charges_de_dup %<>% 
   mutate(charge_adjudicated_flag = ifelse(charge_disposition %in% charge_adjudicated,1,0)) %>% 
   # filter(charge_disposition %in% charge_adjudicated) %>%
@@ -185,6 +186,7 @@ tcs_placements_charges_de_dup %<>%
          current_offense = str_replace_all(current_offense,"[:punct:]", "")) ### remove all punctuation from current_offense and make all lower case -- for merge with current_offense from Emily's lookup table
 ```
 
+###ADD ORIGINAL OFFENSE HERE, AS WELL, FOR PRE-ADJUDICATION/DISPOSITION DETENTION
 
 ```{r include=FALSE}
 ### set sharepoint path using csgjcr::csg_sp_path function
