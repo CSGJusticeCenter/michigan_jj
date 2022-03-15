@@ -1,0 +1,34 @@
+---
+title: "Untitled"
+author: "Amund Tallaksen"
+date: '2022-03-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+# packages / set.seed
+library(csgjcr)
+library(tidyverse)
+library(lubridate)
+set.seed(1234)
+
+
+# file path to analytic files
+MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/Final/Analytic Files")
+
+
+```
+
+
+
+```{r}
+
+Joined <- read_csv(file.path(MI_path, "MI_JJ_joined_file.csv"), show_col_types = FALSE)
+
+
+
+
+```
+
