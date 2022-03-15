@@ -77,7 +77,10 @@ PCS <- PCS %>%
   # Add 3 columns in order to match with other files (fill new columns with NA)
   mutate(violation_cnst_ind = NA) %>% relocate(violation_cnst_ind, .after = "violation_prob_ind") %>%
   mutate(off_stat_mflag = NA) %>% relocate(off_stat_mflag, .after = "off_lvl_disp") %>%
-  mutate(num_chg = NA) %>% relocate(num_chg, .before = "num_chg_adj")
+  mutate(num_chg = NA) %>% relocate(num_chg, .before = "num_chg_adj") %>%
+  
+  # Make sure Kid ID is unique once joined
+  mutate(kid_id = paste0(33,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
 
 
@@ -93,8 +96,10 @@ TCS <- TCS %>%
   mutate(off_lvl_disp = ifelse(is.na(off_lvl_disp), "MISSING", off_lvl_disp)) %>%
 
   # Add 1 column in order to match with other files (fill new columns with NA)
-  mutate(off_stat_mflag = NA) %>% relocate(off_stat_mflag, .after = "off_lvl_disp")
+  mutate(off_stat_mflag = NA) %>% relocate(off_stat_mflag, .after = "off_lvl_disp") %>%
 
+  # Make sure Kid ID is unique once joined
+  mutate(kid_id = paste0(44,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
 
 Wayne <- Wayne %>%
@@ -116,23 +121,38 @@ Wayne <- Wayne %>%
   relocate(disp_date, .after = "cc_ind") %>%
   relocate(disp_desc, .after = "disp_date") %>%
   relocate(off_lvl_disp, .after = "off_lvl_pet") %>%
-  relocate(num_chg, .after = "off_stat_mflag")
+  relocate(num_chg, .after = "off_stat_mflag") %>%
 
+  # Make sure Kid ID is unique once joined
+  mutate(kid_id = paste0(22,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
 
 ##########################################################################################################
 ##########################################################################################################
 #
-# Join files
+# Join files and create new ID variables
 #
 ###########################################################################################################
 ###########################################################################################################
 
-Joined <- rbind(PCS, TCS, Wayne)
+
+
+Joined <- rbind(PCS, TCS, Wayne) %>%
+  mutate(pet_id = paste0(55, row_number())) %>% relocate(pet_id, .after = "pet_id_orig") #%>%
+  #mutate(age_cat = case_when())
 
 
 
+###########################################################################################################
+############################################################################################################
+#
+# Create csv file
+#
+#############################################################################################################
+#############################################################################################################
 
+
+#  write.csv(as.data.frame(Joined), file = file.path(MI_path, "MI_JJ_joined_file.csv"))
 
 
 
