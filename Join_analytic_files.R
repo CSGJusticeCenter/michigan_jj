@@ -192,14 +192,13 @@ Kalamazoo <- Kalamazoo %>%
 
 
 Joined <- rbind(PCS, TCS, Wayne, Kalamazoo) %>%
-  mutate(pet_id = paste0(55, row_number())) %>% relocate(pet_id, .after = "pet_id_orig") %>%
+  mutate(pet_id = paste0(555, row_number())) %>% relocate(pet_id, .after = "pet_id_orig") %>%
   mutate(age_cat = case_when(age < 12 ~ 1,
                              age >= 12 & age < 14 ~ 2,
                              age >= 14 & age < 16 ~ 3,
                              age >= 16 & age < 18 ~ 4,
                              age >= 18 & age < 21 ~ 5)) %>%
-  relocate(age_cat, .after = "age") %>%
-  mutate(pet_id = paste0(555, row_number()))
+  relocate(age_cat, .after = "age") 
 
 
 rm(PCS, TCS, Wayne, Kalamazoo)
