@@ -219,7 +219,7 @@ Joined %>%
 #############################################################################################################
 
 
-write.csv(as.data.frame(Joined), file = file.path(MI_path, "MI_JJ_joined_file.csv"))
+write.csv(as.data.frame(Joined), file = file.path(MI_path, "MI_JJ_joined_file.csv"), row.names = FALSE)
 
 
 
