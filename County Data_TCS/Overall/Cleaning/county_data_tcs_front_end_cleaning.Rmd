@@ -1,0 +1,581 @@
+---
+title: "mi_tcs_county_front_end_cleaning"
+author: "Andrew Byrum"
+date: "03/2022"
+output: html_document
+---
+
+# {.tabset .tabset-fade .tabset-pills}
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
+````
+
+## Analytic File Outline
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_front_end_shell_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted")
+
+### import mi_jj_front_end_shell
+mi_jj_front_end_shell <- read_xlsx(
+  file.path(
+    sharepoint_front_end_shell_path, "Front End Analysis Data Shell.xlsx"),
+  sheet = "Analysis_file_layout",
+  range = "A8:G28",
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### print table via kableextra
+kable(mi_jj_front_end_shell, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+
+<br><br>
+
+## Cleaning Syntax
+
+<br>
+
+### 1. Read in Pertinent TCS Files for Placement Analysis: 'cases', 'charges', 'dispositions', 'mandatory events'
+```{r message=FALSE,warning=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
+
+### import cases
+tcs_cases <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Cases_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import charges
+tcs_charges <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Charges_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import dispositions
+tcs_dispositions <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_DispositionsPerCharge_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import placements
+tcs_placements <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Placements_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+### import mandatory events 
+tcs_mandatory_events <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_MandatoryEvents_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+```
+
+<br><br>
+
+### 2. De-dup/figure out primary keys for 'cases', 'charges', 'dispositions', 'placements', 'tcs_mandatory_events' and merge `cases`, `charges`, and `placements` together
+
+
+From Laura, Tanya, and Susan Svoboda:
+
+For TCS, all data sets may be linked with CourtType, Year, TCSReportCourtJCL, CaseYear, CaseID and CaseType.
+
+Juvenile/Name Number is available on the following data sets:
+Cases – JuvenileNbr identifies the juvenile for the TCSreportCourtname.  Some of the FJ casetypes do not have a JuvenileNbr because a juvenile record is not created in adult cases.  In adult cases(in this data set only FJ), if the case had a prior juvenile record the JuvenileNbr will be populated indicated a reoffending juvenile in adult court.
+
+Charges – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case.
+
+MandatoryEvents –   NameNbr identifies the juvenile; 1 to many mandatory events will relate to a case.  Key events, legal status set, adjudication, disposition events etc.
+
+Placements - NameNbr identifies the juvenile; 0 to many placement events will relate to a case.  Would recommend using the PCN events and not use ORD.  Courts should be using PCN events.
+Financials –   PayorPatyNameNbr identifies the payor party.  This may or may not be the juvenile; 0 to many financial records will relate to a case.  Link to cases and use Juvenile Nbr, if needed.
+Program Results – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 0 to many program results can relate to a case.
+Sentencing – no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed.
+
+<br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### cases
+######################################
+
+# de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
+tcs_cases_de_dup <- tcs_cases %>%
+  filter(!is.na(juvenile_nbr)==TRUE,
+         juvenile_nbr!=0, ### there are a handful of records where juvenile_nbr=0; appears to be data error as the records don't consistently share other identifying info like dates and county
+         !is.na(case_number)==TRUE,
+         caseload_action == "NW FILE") %>% 
+  dplyr::rename(case_id = case_number) %>%  ### there are a number of important primary keys which have different names across the files -- here case_id and case_number are the same ID (naming all 'case_id')
+  distinct(juvenile_nbr,case_id,court_type,case_file_dt,tc_sreport_court_jcl,case_type,.keep_all = TRUE) %>% 
+  mutate(year = as.numeric(year),
+         case_year = as.numeric(year)) %>% 
+    mutate(county_name_clean = word(tc_sreport_courtname, 1),
+         county_name_clean = str_to_title(county_name_clean),
+         county_name_clean = str_to_title(county_name_clean),
+         case_file_year = year(ymd(case_file_dt))) %>% 
+  mutate(case_id_real_unique = paste0(juvenile_nbr,case_id,court_type,case_file_dt,tc_sreport_court_jcl,case_type)) %>% 
+  filter(case_file_year %in% c(2016,2017,2018,2019,2020)) %>% 
+    mutate(race_ethnic = case_when(
+    defendant_race %in% c("WA","Caucasian","Russian","Romanian") ~ 1,
+    defendant_race %in% c("BA","AF") ~ 2,
+    defendant_race %in% c("SA","H") ~ 3,
+    defendant_race %in% c("AI") ~ 4,
+    defendant_race %in% c("OA","A","CH","K","HI") ~ 5,
+    defendant_race %in% c("BR","MR") ~ 6,
+    defendant_race %in% c("OT","AR") ~ 7,
+    TRUE ~ as.numeric(NA))) %>% 
+  mutate(sex = case_when( 
+    defendant_gender=="F" ~ 1,
+    defendant_gender=="M" ~ 2,
+    TRUE ~ as.numeric(NA)))
+
+### 99% of dropped cases are due to 'caseload_action' -- multiple entries as different stages of case are entered 
+```
+
+<br><br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### charges
+######################################
+
+# de-dup charges file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped
+# note: there are 1,288 records in the cases df that do not appear at all in the charges df; note from Laura and team: "no juvenile name number in data set – link to cases and use Juvenile Nbr, if needed; 1 to many charges can relate to a case."
+# case_number identifies case and id uniquely identifies charge within case  
+tcs_charges_de_dup <- tcs_charges %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(id)==TRUE) %>% 
+  distinct(id,case_id,.keep_all = TRUE) %>% 
+  mutate(year = as.numeric(year),
+         case_year = as.numeric(year))
+```
+
+<br><br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### dispositions
+######################################
+
+# de-dup dispositions file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped -- will have to further de-dup by disposition later
+
+# dropped records are due to each offense having its own disposition row per case per offense/charge (id)
+# adding 'id' results in no rows being dropped
+tcs_dispositions_de_dup <- tcs_dispositions %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(name_nbr)==TRUE) %>% 
+  dplyr::rename(juvenile_nbr= name_nbr) %>% ### there are a number of important primary keys which have different names across the files -- here name_nbr and juvenile_nbr are the same ID (naming all 'juvenile_nbr')
+  distinct(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,.keep_all = TRUE) %>% 
+  mutate(id = as.character(id))
+```
+
+<br><br>
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### placements
+######################################
+
+# de-dup placements file -- using case_id (same as 'case_number' in tcs_cases and 'id' (which is "Unique ID for the record.")); no records dropped 
+# looks like there are some pure dups
+tcs_placements_de_dup <- tcs_placements %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(name_nbr)==TRUE,
+         order_type=="PCN") %>% ### from laura and team: "Would recommend using the PCN events and not use ORD ("ordered to transport"/temporary record).  Courts should be using PCN ("placement change notice") events."
+  dplyr::rename(juvenile_nbr= name_nbr) %>% ### there are a number of important primary keys which have different names across the files -- here name_nbr and juvenile_nbr are the same ID (naming all 'juvenile_nbr')
+  distinct(juvenile_nbr,case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,place_begin_date,place_type,.keep_all = TRUE) %>% ### 54 dups (can further de-dup by keeping placement with longer los when dates match)
+  mutate(unique_placement_id = paste0(juvenile_nbr,case_id,place_begin_date,place_type,place_end_date),
+         unique_case_id = paste0(juvenile_nbr,case_id,case_year,case_type),
+         unique_youth_id = paste0(court_type,year,tc_sreport_court_jcl,juvenile_nbr),
+         year = as.numeric(year),
+         case_year = as.numeric(year)) %>% 
+  ungroup()
+```
+
+```{r message=FALSE,warning=FALSE}
+######################################
+#### tcs_mandatory_events
+######################################
+mandatory_events_probation_violation <- c("VIOLATION OF CONSENT CALENDAR"
+,"VIOLATION OF CONSENT CALENDAR/DIVERSION"
+,"VIOLATION OF PROBATION"
+,"PROBATION REVOKED"
+,"PROBATION VIOLATION HEARING"
+,"PROBATION VIOLATION SENTENCE")
+
+mandatory_events_consent_calendar_violation <- c("VIOLATION OF CONSENT CALENDAR"
+,"VIOLATION OF CONSENT CALENDAR/DIVERSION"
+,"VIOLATION OF PROBATION"
+,"PROBATION REVOKED"
+,"PROBATION VIOLATION HEARING"
+,"PROBATION VIOLATION SENTENCE")
+
+tcs_mandatory_events_de_dup <- tcs_mandatory_events %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(id)==TRUE) %>% 
+  distinct(case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,.keep_all = TRUE) %>% 
+  mutate(violation_prob_ind = ifelse(event_desc %in% mandatory_events_probation_violation,1,0),
+         violation_cnst_ind = ifelse(event_desc %in% mandatory_events_consent_calendar_violation,1,0),
+         # year = as.numeric(year),
+         case_year = as.numeric(case_year)) %>%  
+  filter(violation_prob_ind==1 | violation_cnst_ind==1) %>% ### create flag for probation violation hearing and consent calendar violation hearing; note that this is a flag for the presence of a violation hearing in the events data table, not necessarily an adjudicated violation/actual violation (PCS data doesn't have this additional data so we decided to simply code violation hearings for consistency between tcs and pcs)); will need to recode later to align with analytic shell
+  dplyr::select(case_id,court_type,tc_sreport_court_jcl,case_year,case_type,violation_prob_ind,violation_cnst_ind)
+```
+
+<br><br>
+
+### 3. Merge `cases`, `charges`, and `mandatory events`
+
+<br>
+
+#### Join `charges` to `cases` (`cases` is base file throughout, but using `inner_join` here for the time being -- making decision that all cases must have corresponding charge data to bew counted. need to confirm this logic/decision with team)
+```{r message=FALSE,warning=FALSE}
+### we don't successfully join for 1,406 placement records out of 14,968 total (9.4%; 90.6% match rate here); follow up with SCAO as to why this may be the case?
+### we also add duplicates -- as more than one charge may link to an individual placement (we will eventually de-dup by most severe adjudicated charge associated with a placement)
+tcs_cases_charges_de_dup <- left_join(tcs_cases_de_dup,tcs_charges_de_dup,by=c("case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type")) %>% 
+  mutate(dispo_date = format(mdy(dispo_date),"%m/%d/%Y"),
+         dispo_date = as.character(gsub("/","",dispo_date)),
+         offense_date = format(mdy(offense_date),"%m/%d/%Y"),
+         offense_date = as.character(gsub("/","",offense_date)),
+         case_file_dt = format(ymd(case_file_dt.x),"%m/%d/%Y"),
+         case_file_dt = as.character(gsub("/","",case_file_dt))) %>% 
+  mutate(off_pet_orig_pending = ifelse((original_offense=="PENDING" | (is.na(original_offense)==TRUE & !is.na(current_offense)==TRUE)),1,0),
+        off_pet_orig_pending = ifelse((original_offense!="PENDING" & !is.na(original_offense)==TRUE),0,off_pet_orig_pending),
+        off_pet_orig_pending = ifelse((is.na(original_offense)==TRUE & is.na(current_offense)==TRUE),NA,off_pet_orig_pending),
+        original_offense = ifelse(off_pet_orig_pending==1,current_offense,original_offense))
+```
+
+```{r message=FALSE,warning=FALSE}
+### created disposition flag with following categories: adjudication, non-adjudication, and other
+
+charge_adjudicated <- c("ADMITTED ALLEGATIONS","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE")
+
+charge_non_adjudication <- c("CONSENT CALENDAR PLAN", "CONSENT CALENDAR PROBATION", "DISMISS INCOMPETENT", "DISMISSED", "DISMISSED INCOMPETENT","DIVERTED", "FOUND GUILTY", "FOUND NOT COMPETENT", "INACTIVE INCOMPETENT", "NOT AUTHORIZED", "NOT CHARGED", "NOT FOUND W/IN PROVISION CODE", "NOT GUILTY", "REMAND")
+
+charge_other_adjudicated <- c("CHANGE VENUE/TRANSFER", "TRANSFER", "TRADITIONAL WAIVER","DESIGNATED GRANTED")
+
+### recode disposition 
+tcs_cases_charges_de_dup %<>% 
+  mutate(disp_desc = case_when(
+             charge_disposition %in% charge_adjudicated ~ 1,
+             charge_disposition %in% charge_non_adjudication ~ 2,
+             charge_disposition %in% charge_other_adjudicated ~ 3,
+             TRUE ~ as.numeric(NA))) %>%  
+  mutate(original_offense = str_to_lower(original_offense),
+         original_offense = str_replace_all(original_offense,"[:punct:]", ""),
+         current_offense = str_to_lower(current_offense),
+         current_offense = str_replace_all(current_offense,"[:punct:]", "")) %>% ### remove all punctuation from current_offense and make all lower case -- for merge with current_offense from Emily's lookup table
+  group_by(case_id_real_unique) %>% 
+  mutate(num_chg = n_distinct(id),
+         num_chg_adj = n_distinct(id[disp_desc==1])) %>% 
+  ungroup() 
+```
+
+#### Read in PACC code lookup table that Emily created to clean offense classification and create hierarchy -- need to join to both original and current offense
+
+```{r message=FALSE,warning=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_pacc_lookup_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/JDW/")
+```
+
+```{r message=FALSE,warning=FALSE}
+### import pacc lookup -- jdw -- current offense
+jdw_charge_pacc_code_lookup_current <- readr::read_csv(
+  file.path(
+    sharepoint_pacc_lookup_data_path, "JDWOffCodes_sheet_1_csv.csv")) %>% 
+  clean_names() %>% 
+  dplyr::rename(category_current = category,
+                offcode_combined_current = offcode_combined,
+                off_level_current = off_level,
+                severity_current = severity) %>% 
+  mutate(current_offense = str_to_lower(offcode_combined_current),
+         current_offense = str_replace_all(current_offense,"[:punct:]", "")) %>%  ### remove all punctuation from offcode_combined and make all lower case -- current_offense field has minimal punctuation (will remove all punctuation, as well)
+  distinct(current_offense,.keep_all=TRUE) ### some duplicate offenses based on multiple entries with varying punctuation placements
+
+### import pacc lookup -- msp -- current offense
+msp_charge_pacc_code_lookup_current <- readr::read_csv(
+  file.path(
+    sharepoint_pacc_lookup_data_path, "JDWOffCodes_sheet_2_csv.csv")) %>% 
+  clean_names() %>% 
+  rename(offcode_combined_current = disposedcode,
+         off_level_current = desposeddegreefelonymisdeme,
+         category_current = off_cat,
+         severity_current = severity) %>% 
+  select(-disposeddescription) %>% 
+  mutate(current_offense = str_to_lower(offcode_combined_current),
+         current_offense = str_replace_all(current_offense,"[:punct:]", "")) %>%  ### remove all punctuation from offcode_combined and make all lower case -- current_offense field has minimal punctuation (will remove all punctuation, as well)
+  distinct(current_offense,.keep_all=TRUE) ### some duplicate offenses based on multiple entries with varying punctuation placements
+
+### stack msp and jdw lookups
+jdw_msp_charge_pacc_code_current_lookup <- rbind(jdw_charge_pacc_code_lookup_current,msp_charge_pacc_code_lookup_current) %>% 
+  distinct(current_offense,.keep_all=TRUE)
+```
+
+```{r message=FALSE,warning=FALSE}
+### import pacc lookup -- jdw -- original offense
+jdw_charge_pacc_code_lookup_original <- readr::read_csv(
+  file.path(
+    sharepoint_pacc_lookup_data_path, "JDWOffCodes_sheet_1_csv.csv")) %>%
+  clean_names() %>%
+  dplyr::rename(category_original = category,
+                offcode_combined_original = offcode_combined,
+                off_level_original = off_level,
+                severity_original = severity) %>%
+  mutate(original_offense = str_to_lower(offcode_combined_original),
+         original_offense = str_replace_all(original_offense,"[:punct:]", "")) %>%  ### remove all punctuation from offcode_combined and make all lower case -- current_offense field has minimal punctuation (will remove all punctuation, as well)
+  distinct(original_offense,.keep_all=TRUE) ### some duplicate offenses based on multiple entries with varying punctuation placements
+
+### import pacc lookup -- msp -- original offense
+msp_charge_pacc_code_lookup_original <- readr::read_csv(
+  file.path(
+    sharepoint_pacc_lookup_data_path, "JDWOffCodes_sheet_2_csv.csv")) %>%
+  clean_names() %>%
+  rename(offcode_combined_original = disposedcode,
+         off_level_original = desposeddegreefelonymisdeme,
+         category_original = off_cat,
+         severity_original = severity) %>%
+  select(-disposeddescription) %>%
+  mutate(original_offense = str_to_lower(offcode_combined_original),
+         original_offense = str_replace_all(original_offense,"[:punct:]", "")) %>%  ### remove all punctuation from offcode_combined and make all lower case -- current_offense field has minimal punctuation (will remove all punctuation, as well)
+  distinct(original_offense,.keep_all=TRUE) ### some duplicate offenses based on multiple entries with varying punctuation placements
+
+### stack msp and jdw lookups
+jdw_msp_charge_pacc_code_original_lookup <- rbind(jdw_charge_pacc_code_lookup_original,msp_charge_pacc_code_lookup_original) %>%
+  distinct(original_offense,.keep_all=TRUE)
+```
+
+```{r message=FALSE,warning=FALSE}
+### Join jdw_charge_pacc_code_lookup to tcs_placements_charges_de_dup -- for both original and current offenses
+
+### no corresponding pacc lookup values for ... -- current offense
+tcs_cases_charges_de_dup_pacc <- left_join(tcs_cases_charges_de_dup,jdw_msp_charge_pacc_code_current_lookup,by="current_offense") 
+
+# tcs_cases_charges_de_dup_pacc_huh <- tcs_cases_charges_de_dup_pacc %>%
+#   filter(is.na(off_level_current)) %>%
+#   select(case_id_real_unique,current_offense)
+
+### no corresponding pacc lookup values for ... -- current offense
+tcs_cases_charges_de_dup_pacc <- left_join(tcs_cases_charges_de_dup_pacc,jdw_msp_charge_pacc_code_original_lookup,by="original_offense") 
+```
+
+```{r message=FALSE,warning=FALSE}
+### Recode several missing offenses based on Emily's notes:
+recode_to_status <- c("712a2d4","722755","ord code 26267")
+
+recode_to_misd_non_person <- c("7503675","7505354a1","ord code 2649","ord code 26492","ord code 2651","ord code 2654","7527971a","9999999904","local orddisorderly")
+
+recode_to_misd_person <- c("75081a1")
+
+recode_to_felony_person <- c("roassault police")
+
+recode_to_other <- c("no crime")
+```
+
+```{r message=FALSE,warning=FALSE}
+### De-dup by `placement` and `case` -- create flag to designate the most serious charge associated with that unique `placement`/`case`
+
+### create offense levels, for both petitioned and adjudicated for each individual record; then group by case and select most severe (min) offense within each category; for adjudicated offenses, we're only considering charges that have disp_desc==1 (they were adjudicated)
+tcs_cases_charges_de_dup_pacc %<>%
+  mutate(off_lvl_pet_ind_charge = case_when(
+    (off_level_original == "F" & category_original == "Person") | original_offense%in%recode_to_felony_person ~ 1,
+    off_level_original == "F" & category_original != "Person" ~ 2,
+    (off_level_original == "M" & category_original == "Person") | original_offense%in%recode_to_misd_person ~ 3,
+    (off_level_original == "M" & category_original != "Person") | original_offense%in%recode_to_misd_non_person ~ 4,
+    off_level_original == "S" | original_offense%in%recode_to_status ~ 5,
+    off_level_original %in% c("I","X") | original_offense%in%recode_to_other ~ 6,
+    TRUE ~ as.numeric(NA))) %>% 
+  mutate(off_lvl_disp_ind_charge = case_when(
+    ((off_level_current == "F" & category_current == "Person") | current_offense%in%recode_to_felony_person) & disp_desc==1 ~ 1,
+    off_level_current == "F" & category_current != "Person"  & disp_desc==1 ~ 2,
+    ((off_level_current == "M" & category_current == "Person") | current_offense%in%recode_to_misd_person) & disp_desc==1 ~ 3,
+    ((off_level_current == "M" & category_current != "Person") | current_offense%in%recode_to_misd_non_person) & disp_desc==1 ~ 4,
+    (off_level_current == "S" | current_offense%in%recode_to_status) & disp_desc==1 ~ 5,
+    (off_level_current %in% c("I","X") | current_offense%in%recode_to_other) & disp_desc==1 ~ 6,
+    TRUE ~ as.numeric(NA))) %>% 
+  group_by(case_id_real_unique) %>% 
+  mutate(off_lvl_pet = min(off_lvl_pet_ind_charge),
+         off_lvl_disp = min(off_lvl_disp_ind_charge)) %>% 
+  ungroup() %>% 
+  distinct(case_id_real_unique, .keep_all=TRUE) ### now the file is unique by case 
+```
+
+#### Create consent calendar flag
+```{r message=FALSE,warning=FALSE}
+### Note from Tanya/Susan on coding consent calendar:
+### Use PublicStatus: P/Public or blank; S/Suppressed or D/Suppressed Diversion or C/Suppressed Consent Calendar, E/Expunged
+tcs_cases_charges_de_dup_pacc %<>%
+  mutate(cc_ind = ifelse(public_status.x=="C",1,0))
+```
+
+#### Join cleaned `cases`/`charges` to `mandatory events` for violation hearing data; also join county lookup table for 5-digit FIPS code
+```{r message=FALSE,warning=FALSE}
+### join tcs_mandatory_events_de_dup to add violation_prob_ind and violation_cnst_ind flags
+### need to recode violation_prob_ind and violation_cnst_ind based on following logic:
+### 1 = Violation, 2 = Not a violation, 3 = Not eligible
+### using cc_ind, disp_desc
+tcs_placements_cases_de_dup_events <- left_join(tcs_cases_charges_de_dup_pacc,tcs_mandatory_events_de_dup,by=c("case_id","court_type","tc_sreport_court_jcl","case_year","case_type")) %>% 
+  mutate(violation_prob_ind = case_when(
+             violation_prob_ind==1 & disp_desc==1 ~ 1,
+             violation_prob_ind!=1 & disp_desc==1 ~ 2,
+             disp_desc!=1 ~ 3,
+             TRUE ~ as.numeric(NA))) %>%  
+    mutate(violation_cnst_ind = case_when(
+             violation_cnst_ind==1 & cc_ind==1 ~ 1,
+             violation_cnst_ind!=1 & cc_ind==1 ~ 2,
+             cc_ind!=1 ~ 3,
+             TRUE ~ as.numeric(NA)))
+```
+
+```{r message=FALSE,warning=FALSE}
+### import michigan county data to attach fips code to county
+df_mi_ezapop_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_17_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name_clean =  gsub(" County", "", county_name),
+         county_fips = paste0(as.character(state_code),county_code)) %>% 
+  select(county_name_clean,county_fips)
+```
+
+```{r message=FALSE,warning=FALSE}
+tcs_placements_cases_de_dup_events %<>%
+  left_join(df_mi_ezapop_county_level, by = "county_name_clean") %>% 
+  mutate(case_type_chr = case_type) %>% 
+  mutate(file_src = 4,
+         pet_id_orig = as.character(case_id_real_unique),
+         kid_id_orig = as.character(juvenile_nbr),
+         case_type = case_when(
+             case_type_chr=="DL" ~ 1,
+             case_type_chr=="DJ" ~ 2,
+             case_type_chr=="FJ" ~ 3,
+             case_type_chr=="IJ" ~ 4,
+             case_type_chr=="TL" ~ 5,
+             TRUE ~ as.numeric(NA)),
+         county_id = as.character(county_fips),
+         race_ethnic = as.numeric(race_ethnic),
+         sex = as.numeric(sex),
+         age = as.numeric(defendant_age_at_filing),
+         petition_date = as.character(case_file_dt),
+         offense_date = as.character(offense_date),
+         violation_prob_ind = as.numeric(violation_prob_ind),
+         violation_cnst_ind = as.numeric(violation_cnst_ind),
+         cc_ind = as.numeric(cc_ind),
+         disp_date = as.character(dispo_date),
+         disp_desc = as.numeric(disp_desc),
+         off_lvl_pet = as.numeric(off_lvl_pet),
+         off_lvl_disp = as.numeric(off_lvl_disp),
+         num_chg = as.numeric(num_chg),
+         num_chg_adj = as.numeric(num_chg_adj)) 
+
+# %>%
+#   select(file_src,pet_id_orig,kid_id_orig,case_type,county_id,race_ethnic,sex,age,petition_date,offense_date,violation_prob_ind,violation_cnst_ind,cc_ind,disp_date,disp_desc,off_lvl_pet,off_lvl_disp,num_chg,num_chg_adj) %>%
+#   distinct(pet_id_orig, .keep_all=TRUE) ### now the file is unique by case
+```
+
+#### Write out analytic file as CSV
+```{r eval=FALSE,message=FALSE,warning=FALSE}
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_front_end_analytic_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/Final/Analytic Files")
+
+### export tcs_placements_cases_de_dup_events as csv file
+readr::write_csv(tcs_placements_cases_de_dup_events, file.path(
+    sharepoint_front_end_analytic_path, "tcs_front_end_analytic_file.csv"))
+
+### import tcs_placements_cases_de_dup_events as csv file to double check leading zeros are preserved (they are)
+# tcs_placements_cases_de_dup_events_please <- readr::read_csv(file.path(
+#     sharepoint_front_end_analytic_path, "tcs_front_end_analytic_file.csv"))
+```
+
+<br><br>
+
+## Cross-tabs
+
+<br>
+
+Cross tabs of `case_type`, `race_ethnic`, `sex`, `cc_ind`, `disp_desc`, `off_lvl_pet`, `off_lvl_disp`
+
+<br>
+
+`case_type`
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$case_type_chr,tcs_placements_cases_de_dup_events$case_type, useNA = 'always')
+```
+
+<br>
+
+`race_ethnic`
+
+From Laura and team:
+
+From TCS  
+•	AI-American Indian  
+•	BR-Bi-Racial 
+•	OT-Other  
+•	BA-Black American  
+•	OA-Oriental American  
+•	SA-Spanish American  
+•	WA-White American  
+•	A-Asian American  
+•	AF-African/American  
+•	AR-Arabic  
+•	C-Caucasian  
+•	H-Hispanic  
+•	CH-Chinese  
+•	K-Korean  
+•	MR-Multi-Racial  
+•	R-Russian  
+•	RO-Romanian  
+•	HI-Native Hawaiian 
+
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$race_ethnic,tcs_placements_cases_de_dup_events$defendant_race, useNA = 'always')
+```
+
+<br>
+
+`sex`
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$sex,tcs_placements_cases_de_dup_events$defendant_gender, useNA = 'always')
+```
+
+<br>
+
+`cc_ind`
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$cc_ind,tcs_placements_cases_de_dup_events$public_status.x, useNA = 'always')
+```
+
+<br>
+
+`disp_desc`
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$disp_desc,tcs_placements_cases_de_dup_events$charge_disposition, useNA = 'always')
+```
+
+<br>
+
+`off_lvl_pet`
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$off_lvl_pet,tcs_placements_cases_de_dup_events$original_offense, useNA = 'always')
+```
+
+<br>
+
+`off_lvl_disp`
+```{r message=FALSE,warning=FALSE}
+table(tcs_placements_cases_de_dup_events$off_lvl_disp,tcs_placements_cases_de_dup_events$current_offense, useNA = 'always')
+```
+
+<br><br>

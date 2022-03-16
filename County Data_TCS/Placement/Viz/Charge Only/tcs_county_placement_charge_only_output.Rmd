@@ -158,7 +158,7 @@ tcs_placements_de_dup %<>%
 
 ```{r include=FALSE}
 ### we don't successfully join for 62 placement records out of 10,325 total (0.6%; 99.4% match rate here)
-tcs_placements_cases_de_dup <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,by=c("juvenile_nbr","case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type"))
+tcs_placements_cases_de_dup <- left_join(tcs_placements_de_dup,by=c("juvenile_nbr","case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type"))
 ```
 
 
@@ -166,7 +166,7 @@ tcs_placements_cases_de_dup <- left_join(tcs_placements_de_dup,tcs_cases_de_dup,
 ### we don't successfully join for 885 placement records out of 10,325 total (8.5%; 91.5% match rate here) 
 ### we also add duplicates -- as more than one charge may link to an individual placement (we will eventually de-dup by most severe adjudicated charge associated with a placement)
 ### for this analysis, we need charge data so merging via inner_join to keep only records with both placement and charge data
-tcs_placements_charges_de_dup <- inner_join(tcs_placements_cases_de_dup,tcs_charges_de_dup,by=c("case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type")) %>% 
+tcs_placements_charges_de_dup <- inner_join(tcs_cases_de_dup,tcs_charges_de_dup,by=c("case_id","court_type","year","tc_sreport_court_jcl","case_year","case_type")) %>% 
   mutate(adjudication_dt = ymd(adjudication_dt),
          place_begin_date = ymd(place_begin_date)) %>% 
   mutate(before_adjudication_flag = ifelse(place_begin_date<adjudication_dt,1,0),
@@ -176,7 +176,8 @@ tcs_placements_charges_de_dup <- inner_join(tcs_placements_cases_de_dup,tcs_char
 
 ```{r include=FALSE}
 ### coding here based on guidance from emily and becky
-charge_adjudicated <- c("ADMITTED ALLEGATIONS","DESIGNATED GRANTED","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE")
+charge_adjudicated <- c("ADMITTED ALLEGATIONS","FOUND GUILTY","FOUND WITHIN PROVISION OF CODE","GUILTY","NOLO CONTENDERE")
+
 
 ### create flag for charges with adjudication
 tcs_placements_charges_de_dup %<>% 
@@ -186,7 +187,6 @@ tcs_placements_charges_de_dup %<>%
          current_offense = str_replace_all(current_offense,"[:punct:]", "")) ### remove all punctuation from current_offense and make all lower case -- for merge with current_offense from Emily's lookup table
 ```
 
-###ADD ORIGINAL OFFENSE HERE, AS WELL, FOR PRE-ADJUDICATION/DISPOSITION DETENTION
 
 ```{r include=FALSE}
 ### set sharepoint path using csgjcr::csg_sp_path function
@@ -242,7 +242,7 @@ recode_to_felony_person <- c("roassault police")
 
 ### pre-adjudication
 tcs_placements_charges_de_dup_pacc_pre_adj <- tcs_placements_charges_de_dup_pacc %>%
-  filter(before_adjudication_flag==1) %>% 
+  filter(before_adjudication_flag==1) %>%
   mutate(current_charge_classification_clean_numeric = case_when(
     (off_level == "F" & category == "Person") | current_offense%in%recode_to_felony_person ~ 1,
     off_level == "F" & category != "Person" ~ 2,
@@ -383,18 +383,17 @@ kable(tcs_placements_charges_de_dup_ind_place_grouped_post, format.args = list(b
 
 ```{r eval=FALSE,include=FALSE}
 tcs_placements_charges_de_dup_denom <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE) %>% 
-  summarise(`Sample N` = n_distinct(unique_placement_id)) 
+  filter(case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  summarise(`Sample N` = n_distinct(case_id)) 
 
 tcs_placements_charges_off_level_missing <- tcs_placements_charges_de_dup_pacc_pre_adj %>% 
-  filter(place_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(current_charge_classification_clean_factor)==TRUE) %>% 
-  distinct(unique_placement_id, .keep_all=TRUE) %>% 
-  group_by(charge_disp_code,charge_disposition) %>% 
-  summarise(`N` = n_distinct(unique_placement_id), 
-            `%` = round(n_distinct(unique_placement_id)/tcs_placements_charges_de_dup_denom$`Sample N`*100, digits = 1)) %>% 
-  ungroup()
+  filter(case_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  distinct(case_id, .keep_all=TRUE) %>% 
+  group_by(current_offense,current_description,current_charge_classification_clean_factor) %>% 
+  summarise(`N` = n_distinct(case_id), 
+            `%` = round(n_distinct(case_id)/tcs_placements_charges_de_dup_denom$`Sample N`*100, digits = 1)) %>% 
+  ungroup() %>% 
+  dplyr::select(current_offense_code_clean = current_offense,current_offense_description=current_description,current_offense_classification_clean=current_charge_classification_clean_factor,`N`,`%`)
 
 ### print table via kableextra
 kable(tcs_placements_charges_off_level_missing, format.args = list(big.mark = ","), align=rep('c')) %>%
@@ -405,12 +404,12 @@ kable(tcs_placements_charges_off_level_missing, format.args = list(big.mark = ",
 ### write out
 
 ### set sharepoint path using csgjcr::csg_sp_path function
-sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Data Questions/TCS/Charges/")
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Codebooks/TCS/")
 
 ### import cases
 openxlsx::write.xlsx(tcs_placements_charges_off_level_missing,
   file.path(
-    sharepoint_tcs_data_path, "tcs_placements_disp_codes.xlsx"))
+    sharepoint_tcs_data_path, "tcs_offense_codes.xlsx"))
   
 ```
 
