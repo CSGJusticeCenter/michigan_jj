@@ -38,7 +38,6 @@ MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/F
 #################################################################################################################
 #################################################################################################################
 
-
 # Original file has 17 variables + remove any pre-2016 petition rows
 PCS <- read_csv(file.path(MI_path, "PCS_petitions.csv"), show_col_types = FALSE) %>%
   mutate(temp_pet_date = mdy(petition_date)) %>% filter(temp_pet_date >= "2016-01-01") %>% select(-temp_pet_date)
@@ -99,7 +98,7 @@ PCS <- PCS %>%
   mutate(violation_cnst_ind = NA) %>% relocate(violation_cnst_ind, .after = "violation_prob_ind") %>%
   mutate(off_stat_mflag = NA) %>% relocate(off_stat_mflag, .after = "off_lvl_disp") %>%
 
-  # Make sure Kid ID is unique once joined
+  # Make sure pet_id is unique once joined; kid_id may be duplicated as one kid may have multiple petitions during study window
   mutate(kid_id = paste0(33,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
 
@@ -109,7 +108,7 @@ TCS <- TCS %>%
   # Add 1 column in order to match with other files (fill new columns with NA)
   mutate(off_stat_mflag = NA) %>% relocate(off_stat_mflag, .after = "off_lvl_disp") %>%
 
-  # Make sure Kid ID is unique once joined
+  # Make sure pet_id is unique once joined; kid_id may be duplicated as one kid may have multiple petitions during study window
   mutate(kid_id = paste0(44,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
 
@@ -130,7 +129,7 @@ Wayne <- Wayne %>%
   relocate(off_lvl_disp, .after = "off_lvl_pet") %>%
   relocate(num_chg, .after = "off_stat_mflag") %>%
 
-  # Make sure Kid ID is unique once joined
+  # Make sure pet_id is unique once joined; kid_id may be duplicated as one kid may have multiple petitions during study window
   mutate(kid_id = paste0(22,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
 
@@ -175,7 +174,7 @@ Kalamazoo <- Kalamazoo %>%
   mutate(violation_cnst_ind = NA) %>% relocate(violation_cnst_ind, .after = "violation_prob_ind") %>%
   mutate(cc_ind = NA) %>% relocate(cc_ind, .after = "violation_cnst_ind") %>%
   
-  # Make sure Kid ID is unique once joined
+  # Make sure pet_id is unique once joined; kid_id may be duplicated as one kid may have multiple petitions during study window
   mutate(kid_id = paste0(11,kid_id_orig)) %>% relocate(kid_id, .after = "kid_id_orig")
 
   
@@ -193,6 +192,13 @@ Kalamazoo <- Kalamazoo %>%
 
 Joined <- rbind(PCS, TCS, Wayne, Kalamazoo) %>%
   mutate(pet_id = paste0(555, row_number())) %>% relocate(pet_id, .after = "pet_id_orig") %>%
+  ### overwriting kid ID using Matt's csg_create_id function in case original kid id has PII
+  ### kid_id_orig still in file, though
+  ### create kid_id_2 then rewrite kid_id with value from kid_id_2 as csg_create_id can't overwite
+  csg_create_id(.,kid_id,
+                .new_id_name = "kid_id_2") %>% 
+  mutate(kid_id = kid_id_2) %>% 
+  dplyr::select(-kid_id_2) %>% 
   mutate(age_cat = case_when(age < 12 ~ 1,
                              age >= 12 & age < 14 ~ 2,
                              age >= 14 & age < 16 ~ 3,
