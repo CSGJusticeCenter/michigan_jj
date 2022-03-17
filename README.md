@@ -1,6 +1,7 @@
 # michigan_jj
 
 ## Repository Structure
+
 ├── RMD/
 │   ├── County Data_TCS/
 |   |    ├── Overall/
