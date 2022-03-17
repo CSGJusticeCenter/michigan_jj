@@ -2,7 +2,7 @@
 
 ## Repository Structure
 
-.
+```
 ├── RMD/
 │   ├── County Data_TCS/
 |   |    ├── Overall/
@@ -41,4 +41,5 @@
 |
 ├── Join_analytic_files.R  # join standardized data from kalamazoo, wayne, tcs, and pcs for front end analysis
 ├── MI_JJ_crosstabs.R  # cross tab syntax for front end analysis with analytic file
-│── README.md
+└── README.md
+```
