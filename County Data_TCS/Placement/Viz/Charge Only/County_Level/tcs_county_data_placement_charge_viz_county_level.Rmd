@@ -388,7 +388,7 @@ tcs_placements_charges_de_dup_pacc_pre_adj <- tcs_placements_charges_de_dup_pacc
 
 ```{r include=FALSE}
 ### set theme and font size
-theme_set(theme_minimal())
+(theme_minimal(20, base_family = "Calibri"))
 
 ### disable scientific notation for viz
 options(scipen=999)
@@ -455,7 +455,7 @@ tcs_placements_charges_de_dup_ind_place_grouped_pre_detention <- tcs_placements_
   # filter(current_charge_classification_clean_factor_grouped=="Status")
 
 ### plot
-ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
+pre_dispo_detention_by_offense_2016_2020 <- ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
             mapping = aes(x = reorder(current_charge_classification_clean_factor_grouped, `Detention (%)`), y = `Detention (%)`, fill = current_charge_classification_clean_factor_grouped)) + 
   geom_bar(stat = "identity", color = "gray40") +
   scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
@@ -494,7 +494,8 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention,
                   show.legend = FALSE)
 
 
-# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\mdhhs_tcs_ppt_02_17\\tcs_detention_placement_rate_county_incl_kalamazoo.png", tcs_detention_placement_rate_county_incl_kalamazoo, width = 8, height = 6)
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\tcs_detention_offense_03_21\\pre_dispo_detention_by_offense_2016_2020.png", pre_dispo_detention_by_offense_2016_2020, width = 8, height = 6)
+
 ```
 
 
@@ -612,7 +613,7 @@ tcs_placements_charges_de_dup_ind_place_grouped_pre_detention <- tcs_placements_
   ungroup()
 
 ### plot
-ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes(y = `Detention (%)`, x = reorder(place_year,-place_year), fill = forcats::fct_rev(current_charge_classification_clean_factor_grouped))) + 
+pre_dispo_detention_by_offense_by_year_2016_2020 <- ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes(y = `Detention (%)`, x = reorder(place_year,-place_year), fill = forcats::fct_rev(current_charge_classification_clean_factor_grouped))) + 
   geom_bar(stat = "identity", color = "gray80") +
   # scale_x_discrete(limits = rev) +
   scale_y_continuous(labels = scales::percent) +
@@ -636,7 +637,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes
   ) +
   labs(x = NULL, y = NULL,
        fill = NULL,
-       caption = "Each bar represents one year.\n'Other/Unknown' offenses excluded (<1% of sample)",
+       caption = NULL,
        title = NULL,
        subtitle = NULL) +
   theme(legend.position = "top",
@@ -652,7 +653,7 @@ ggplot(data = tcs_placements_charges_de_dup_ind_place_grouped_pre_detention, aes
         panel.grid.minor = element_blank()) +
   coord_flip()
 
-# ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\Iowa Revocation Reduction\\Work Products\\Presentations\\r_viz\\supervision_status_by_district_2020.png", supervision_status_by_district_2020, width = 9, height = 6.5) 
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\tcs_detention_offense_03_21\\pre_dispo_detention_by_offense_by_year_2016_2020.png", pre_dispo_detention_by_offense_by_year_2016_2020, width = 8, height = 6)
 ```
 
 <br><br>
@@ -811,7 +812,7 @@ detention_los_overall_grouped <- tcs_placements_charges_de_dup_pacc_pre_adj %>%
   distinct(.,.keep_all=TRUE)
 
 
-ggplot(data = detention_los_overall_grouped,
+pre_dispo_detention_los_2016_2019 <- ggplot(data = detention_los_overall_grouped,
             mapping = aes(x = los_unique_placement_detention_only_grouped_bin, y = percent_within_bin, fill = forcats::fct_rev(los_unique_placement_detention_only_grouped_bin))) + 
   geom_bar(position = "dodge", stat = "identity") +
   scale_fill_manual(values = rev(c("#7fc241","#d6df23","#007392","#eeed90","#0db4e4","#315c15"))) +
@@ -846,6 +847,8 @@ ggplot(data = detention_los_overall_grouped,
                   fontface = "bold",
                   na.rm = TRUE,
                   show.legend = FALSE)
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\tcs_detention_offense_03_21\\pre_dispo_detention_los_2016_2019.png", pre_dispo_detention_los_2016_2019, width = 8, height = 6)
 ```
 
 <br><br>

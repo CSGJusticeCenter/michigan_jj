@@ -39,7 +39,7 @@ MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/F
 #################################################################################################################
 
 # Original file has 17 variables + remove any pre-2016 petition rows
-PCS <- read_csv(file.path(MI_path, "PCS_petitions.csv"), show_col_types = FALSE) %>%
+PCS <- read_csv(file.path(MI_path, "PCS_petitions.csv")) %>%
   mutate(temp_pet_date = mdy(petition_date)) %>% filter(temp_pet_date >= "2016-01-01") %>% select(-temp_pet_date)
 
 # pet_id_orig = all unique
@@ -51,7 +51,7 @@ PCS %>%
 
 
 # Original file has 19 variables + remove any pre-2016 petition rows
-TCS <- read_csv(file.path(MI_path, "tcs_front_end_analytic_file.csv"), show_col_types = FALSE) %>%
+TCS <- read_csv(file.path(MI_path, "tcs_front_end_analytic_file.csv")) %>%
   mutate(temp_pet_date = mdy(petition_date)) %>% filter(temp_pet_date >= "2016-01-01") %>% select(-temp_pet_date)
 
 # pet_id_orig = all unique
@@ -62,7 +62,7 @@ TCS %>%
 ###################################
 
 # Original file has 16 variables + remove any pre-2016 petition rows
-Wayne <- read_csv(file.path(MI_path, "wayne_petitions_for_append_2022-03-14.csv"), show_col_types = FALSE) %>%
+Wayne <- read_csv(file.path(MI_path, "wayne_petitions_for_append_2022-03-14.csv")) %>%
   mutate(temp_pet_date = mdy(petition_date)) %>% filter(temp_pet_date >= "2016-01-01") %>% select(-temp_pet_date)
 
 # pet_id_orig = all unique
@@ -73,7 +73,7 @@ Wayne %>%
 ####################################
 
 # Original file has 17 variables + remove any pre-2016 rows (by OFFENSE date)
-Kalamazoo <- read_csv(file.path(MI_path, "analytic_file_KAL.csv"), show_col_types = FALSE) %>%
+Kalamazoo <- read_csv(file.path(MI_path, "analytic_file_KAL.csv")) %>%
   mutate(temp_off_date = mdy(offense_date)) %>% filter(temp_off_date >= "2016-01-01") %>% select(-temp_off_date)
 
 # pet_id_orig = all unique

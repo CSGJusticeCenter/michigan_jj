@@ -211,19 +211,13 @@ tcs_placements_de_dup <- tcs_placements %>%
 ######################################
 #### tcs_mandatory_events
 ######################################
-mandatory_events_probation_violation <- c("VIOLATION OF CONSENT CALENDAR"
-,"VIOLATION OF CONSENT CALENDAR/DIVERSION"
-,"VIOLATION OF PROBATION"
+mandatory_events_probation_violation <- c("VIOLATION OF PROBATION"
 ,"PROBATION REVOKED"
 ,"PROBATION VIOLATION HEARING"
 ,"PROBATION VIOLATION SENTENCE")
 
 mandatory_events_consent_calendar_violation <- c("VIOLATION OF CONSENT CALENDAR"
-,"VIOLATION OF CONSENT CALENDAR/DIVERSION"
-,"VIOLATION OF PROBATION"
-,"PROBATION REVOKED"
-,"PROBATION VIOLATION HEARING"
-,"PROBATION VIOLATION SENTENCE")
+,"VIOLATION OF CONSENT CALENDAR/DIVERSION")
 
 tcs_mandatory_events_de_dup <- tcs_mandatory_events %>% 
     filter(!is.na(case_id)==TRUE,
@@ -428,15 +422,15 @@ tcs_cases_charges_de_dup_pacc %<>%
 ### need to recode violation_prob_ind and violation_cnst_ind based on following logic:
 ### 1 = Violation, 2 = Not a violation, 3 = Not eligible
 ### using cc_ind, disp_desc
-tcs_placements_cases_de_dup_events <- left_join(tcs_cases_charges_de_dup_pacc,tcs_mandatory_events_de_dup,by=c("case_id","court_type","tc_sreport_court_jcl","case_year","case_type")) %>% 
+tcs_placements_cases_de_dup_events <- left_join(tcs_cases_charges_de_dup_pacc,tcs_mandatory_events_de_dup,by=c("case_id","court_type","tc_sreport_court_jcl","case_type")) %>% 
   mutate(violation_prob_ind = case_when(
              violation_prob_ind==1 & disp_desc==1 ~ 1,
-             violation_prob_ind!=1 & disp_desc==1 ~ 2,
+             is.na(violation_prob_ind)==TRUE & disp_desc==1 ~ 2,
              disp_desc!=1 ~ 3,
              TRUE ~ as.numeric(NA))) %>%  
     mutate(violation_cnst_ind = case_when(
              violation_cnst_ind==1 & cc_ind==1 ~ 1,
-             violation_cnst_ind!=1 & cc_ind==1 ~ 2,
+             is.na(violation_cnst_ind)==TRUE & cc_ind==1 ~ 2,
              cc_ind!=1 ~ 3,
              TRUE ~ as.numeric(NA)))
 ```
@@ -477,11 +471,9 @@ tcs_placements_cases_de_dup_events %<>%
          off_lvl_pet = as.numeric(off_lvl_pet),
          off_lvl_disp = as.numeric(off_lvl_disp),
          num_chg = as.numeric(num_chg),
-         num_chg_adj = as.numeric(num_chg_adj)) 
-
-# %>%
-#   select(file_src,pet_id_orig,kid_id_orig,case_type,county_id,race_ethnic,sex,age,petition_date,offense_date,violation_prob_ind,violation_cnst_ind,cc_ind,disp_date,disp_desc,off_lvl_pet,off_lvl_disp,num_chg,num_chg_adj) %>%
-#   distinct(pet_id_orig, .keep_all=TRUE) ### now the file is unique by case
+         num_chg_adj = as.numeric(num_chg_adj)) %>%
+  select(file_src,pet_id_orig,kid_id_orig,case_type,county_id,race_ethnic,sex,age,petition_date,offense_date,violation_prob_ind,violation_cnst_ind,cc_ind,disp_date,disp_desc,off_lvl_pet,off_lvl_disp,num_chg,num_chg_adj) %>%
+  distinct(pet_id_orig, .keep_all=TRUE) ### now the file is unique by case
 ```
 
 #### Write out analytic file as CSV
