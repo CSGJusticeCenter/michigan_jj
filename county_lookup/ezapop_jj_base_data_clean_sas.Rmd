@@ -5,7 +5,7 @@ output: html_document
 
 Purpose of syntax: To create a county-level juvenile population lookup table w/ race/ethnicity and gender for state of interest. The American Community Survey does not publicly report out population estimates for youth 10-17 (or 10-16 when relevant) at the county level and disaggregated by race/ethnicity and gender. Instead, I am pulling from Census Bureau ACS data provided to the CDC/National Center for Health Statistics which provides single year-of-age- estimate at the county level "to meet programmatic needs such as the creation of age groupings that differ from the standard groupings used by the Census Bureau." This is also the source used by Ezapop, which was developed by OJJDP and NCJJ: https://www.ojjdp.gov/ojstatbb/ezapop/asp/source.asp
 
-Because of concerns about reliability of single year-of-age estimates at the county-level, I am grouping age together (usually 10-17) and pulling estimates from 5 years of data (taking the mean across the five years), 2015-2019. 
+Because of concerns about reliability of single year-of-age estimates at the county-level, I am grouping age together (usually 10-17) and pulling estimates from 5 years of data (taking the mean across the five years), 2015-2019
 
 ```{r include=FALSE}
 ### call libraries
@@ -57,7 +57,7 @@ df_acs_bridged_age_race_sex_15 <- haven::read_sas("C:\\Users\\abyrum\\The Counci
 ### hisp: 1=not Hispanic or Latino; 2=Hispanic or Latino
 
 df_acs_bridged_age_race_sex_15_19_raw <- dplyr::bind_rows(df_acs_bridged_age_race_sex_15,df_acs_bridged_age_race_sex_16,df_acs_bridged_age_race_sex_17,df_acs_bridged_age_race_sex_18,df_acs_bridged_age_race_sex_19) %>% 
-  filter(age<=17 & age>=10) %>% ### filter file off juvenile base population of interest -- youth ages 10 to 17 
+  filter(age<=16 & age>=10) %>% ### filter file off juvenile base population of interest -- youth ages 10 to 17 
   mutate(racesex = factor(racesex,
          levels = c(1,2,3,4,5,6,7,8),
          labels = c("white_male", "white_female", "black_male", "black_female","am_in_ak_native_male","am_in_ak_native_female","asian_pi_male","asian_pi_female")),
@@ -96,8 +96,8 @@ df_acs_bridged_age_race_sex_15_19_final <- df_acs_bridged_age_race_sex_15_19_wid
          overall_asian_pi = not_hispanic_asian_pi + hispanic_asian_pi,
          overall_male = not_hispanic_white_male + not_hispanic_black_male + not_hispanic_am_in_ak_native_male + not_hispanic_asian_pi_male + hispanic_white_male + hispanic_black_male + hispanic_am_in_ak_native_male + hispanic_asian_pi_male,
          overall_female = not_hispanic_white_female + not_hispanic_black_female + not_hispanic_am_in_ak_native_female + not_hispanic_asian_pi_female + hispanic_white_female + hispanic_black_female + hispanic_am_in_ak_native_female + hispanic_asian_pi_female,
-         overall_10_17_population = overall_male + overall_female) %>% 
-  dplyr::select(co_fips,overall_10_17_population,overall_female,overall_male,overall_asian_pi,overall_am_in_ak_native,overall_black,overall_white,hispanic_asian_pi,hispanic_am_in_ak_native,hispanic_black,hispanic_white,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white)
+         overall_10_16_population = overall_male + overall_female) %>% 
+  dplyr::select(co_fips,overall_10_16_population,overall_female,overall_male,overall_asian_pi,overall_am_in_ak_native,overall_black,overall_white,hispanic_asian_pi,hispanic_am_in_ak_native,hispanic_black,hispanic_white,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white)
 
 ### aggregate to state level
 ### combine race and sex columns into several new overall columns for race/ethnicity overall, race overall w/o ethnicity, and sex overall
@@ -118,8 +118,8 @@ df_acs_bridged_age_race_sex_15_19_final_state_agg <- df_acs_bridged_age_race_sex
          overall_asian_pi = sum(not_hispanic_asian_pi + hispanic_asian_pi),
          overall_male = sum(not_hispanic_white_male + not_hispanic_black_male + not_hispanic_am_in_ak_native_male + not_hispanic_asian_pi_male + hispanic_white_male + hispanic_black_male + hispanic_am_in_ak_native_male + hispanic_asian_pi_male),
          overall_female = sum(not_hispanic_white_female + not_hispanic_black_female + not_hispanic_am_in_ak_native_female + not_hispanic_asian_pi_female + hispanic_white_female + hispanic_black_female + hispanic_am_in_ak_native_female + hispanic_asian_pi_female),
-         overall_10_17_population = sum(overall_male + overall_female)) %>% 
-  dplyr::select(state,overall_10_17_population,overall_female,overall_male,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white) %>% 
+         overall_10_16_population = sum(overall_male + overall_female)) %>% 
+  dplyr::select(state,overall_10_16_population,overall_female,overall_male,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white) %>% 
   ungroup()
 
 ### aggregate to state level, excluding wayne for mdhhs analysis that excludes wayne
@@ -163,8 +163,8 @@ df_acs_bridged_age_race_sex_15_19_final <- left_join(df_fips_lookup, df_acs_brid
 # readr::write_delim(df_acs_bridged_age_race_sex_15_19_final_state_agg_no_wayne,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi_state_level_no_wayne.txt" , delim = "|")
 
 ### write out final file for incorporation into base juvenile population rate calculations
-readr::write_delim(df_acs_bridged_age_race_sex_15_19_final_state_agg,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi_state_level.txt" , delim = "|")
+readr::write_delim(df_acs_bridged_age_race_sex_15_19_final_state_agg,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_16_race_eth_sex_mi_state_level.txt" , delim = "|")
 
 ### write out final file for incorporation into base juvenile population rate calculations
-readr::write_delim(df_acs_bridged_age_race_sex_15_19_final,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi.txt" , delim = "|")
+readr::write_delim(df_acs_bridged_age_race_sex_15_19_final,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_16_race_eth_sex_mi.txt" , delim = "|")
 ```
