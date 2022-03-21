@@ -35,9 +35,16 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
   mutate(off_lvl_pet = factor(off_lvl_pet,
          levels = c(1,2,3,4,5,6),
          labels = c("Felony, Person", "Felony, Non-Person", "Misdemeanor, Person", "Misdemeanor, Non-Person","Status","Other"))) %>% 
-  mutate(age_cat = factor(age_cat,
+  mutate(age_cat_old = factor(age_cat,
          levels = c(1,2,3,4,5),
          labels = c("Less than 12", "12 to 14", "14 to 16", "16 to 18","18+"))) %>% 
+  mutate(age_cat = case_when(age < 11 ~ 1,
+                             age >= 11 & age < 13 ~ 2,
+                             age >= 13 & age < 17 ~ 3,
+                             age >= 17 & age < 21 ~ 4),
+         age_cat = factor(age_cat,
+         levels = c(1,2,3,4),
+         labels = c("10 and under", "11 to 12", "13 to 16", "17+"))) %>% 
   mutate(disp_desc = factor(disp_desc,
          levels = c(1,2,3),
          labels = c("Adjudication", "Non-Adjudication", "Other")))
@@ -45,41 +52,58 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
 
 ## Analysis Outline
 
-**Number of unique petitions overall**
+**1. Number of unique petitions overall**
 
-* Count/Proportion By Demographics (Year, Race/Ethnicity, Offense(off_lvl_pet), Categorical Age)
-
-<br>
-
-**Number of unique petitions filed where CONSENT CALENDAR is an option (cc_id = 1)**
-
-* Count/Proportion By Demographics (Year, Race/Ethnicity, Offense, Categorical Age)
+*Count/Proportion By Demographics:*
 
 <br>
 
-**Number of unique petitions adjudicated/non-adjudicated/other (disp_desc)**
+* Year
 
-* Count/Proportion By Demographics (Year, Race/Ethnicity, Offense (off_lvl_disp), Categorical Age)
+* Race/Ethnicity
 
-<br>
+* Most serious offense, at petition and adjudicated 
 
-**Adjudication (disp_desc=1) RRI (Black:White)**
+* Categorical Age (recoded)
 
-* We'll need to pull in census juvenile population (10-17) data for each county
-
-<br>
-
-**Avg num of petitions per unique kid id**
-
-* Assess difference in means by race (I don’t know what the race/eth breakdowns look like, if groups are big enough, compare to White)
+* Petition Rate by County
 
 <br>
 
-**Avg num of adjudications per unique kid id**
+**2. Number of unique petitions filed where CONSENT CALENDAR is an option (cc_id = 1)**
 
-* Assess difference in means by race
+*Count/Proportion By Demographics:*
 
 <br>
+
+* Year
+
+* Race/Ethnicity
+
+* Most serious offense, at petition and adjudicated 
+
+* Categorical Age (recoded)
+
+
+<br>
+
+**3. Number of unique petitions adjudicated/non-adjudicated/other (disp_desc)**
+
+*Count/Proportion By Demographics:*
+
+<br>
+
+* Year
+
+* Race/Ethnicity
+
+* Most serious offense, at petition and adjudicated 
+
+* Categorical Age (recoded)
+
+* Adjudication Rate by County
+
+<br><br>
 
 ## Overall Petitions
 
@@ -162,20 +186,40 @@ kable(petition_count_gender_table, format.args = list(big.mark = ","), align=rep
 
 <br><br>
 
-### Count/Proportion by Offense (off_lvl_disp; most serious adjudicated offense)
+### Count/Proportion by Offense
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_off_denom <- df_mi_front_end_analytic %>% 
+### most serious petitioned offense
+petition_count_off_denom_pet <- df_mi_front_end_analytic %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(off_lvl_pet)==TRUE) %>% 
+  summarise(`Petition N` = n_distinct(pet_id)) 
+
+petition_count_off_table_pet <- df_mi_front_end_analytic %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(off_lvl_pet)==TRUE) %>% 
+  group_by(off_lvl_pet) %>% 
+  summarise(`Petitions, at Petition (N)` = n_distinct(pet_id), 
+            `Petitions, at Petition (%)` = round(n_distinct(pet_id)/petition_count_off_denom_pet$`Petition N`*100, digits = 1)) %>% 
+  ungroup() %>% 
+  rename(off_lvl = off_lvl_pet)
+
+### most serious adjudicated offense
+petition_count_off_denom_adj <- df_mi_front_end_analytic %>% 
   filter(petition_year%in%c(2016,2017,2018,2019,2020),
          !is.na(off_lvl_disp)==TRUE) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
-petition_count_off_table <- df_mi_front_end_analytic %>% 
+petition_count_off_table_adj <- df_mi_front_end_analytic %>% 
   filter(petition_year%in%c(2016,2017,2018,2019,2020),
          !is.na(off_lvl_disp)==TRUE) %>% 
   group_by(off_lvl_disp) %>% 
-  summarise(`Petitions (N)` = n_distinct(pet_id), 
-            `Petitions (%)` = round(n_distinct(pet_id)/petition_count_off_denom$`Petition N`*100, digits = 1)) %>% 
-  ungroup() 
+  summarise(`Petitions, at Adjudication (N)` = n_distinct(pet_id), 
+            `Petitions, at Adjudication (%)` = round(n_distinct(pet_id)/petition_count_off_denom_adj$`Petition N`*100, digits = 1)) %>% 
+  ungroup() %>% 
+  rename(off_lvl = off_lvl_disp)
+
+### join two tables
+petition_count_off_table <- left_join(petition_count_off_table_pet,petition_count_off_table_adj, by = "off_lvl")
 
 ### print table via kableextra
 kable(petition_count_off_table, format.args = list(big.mark = ","), align=rep('c')) %>%
@@ -204,6 +248,77 @@ petition_count_age_table <- df_mi_front_end_analytic %>%
 kable(petition_count_age_table, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") 
+```
+
+<br><br>
+
+### Petitions per 10k youth by county, 2016-2020
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### set theme for now
+theme_set(theme_minimal())
+
+### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
+df_ezapop_race_ethnicity_10_16_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_16_race_eth_sex_mi.txt", delim = "|") %>% 
+  mutate(county_name =  gsub(" County", "", county_name),
+         county_id = as.numeric(paste0(state_code,county_code))) %>% 
+  dplyr::select(county_name,county_id,overall_10_16_population)
+
+### create overall file for numerator in % calculation below
+df_mi_front_end_analytic_county <- df_mi_front_end_analytic %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(county_id)==TRUE) %>% 
+  distinct(pet_id,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
+  group_by(county_id) %>% 
+  summarize(placement_case_count = n_distinct(pet_id[age>=10 & age <17])) %>% 
+  ungroup() %>% 
+  left_join(df_ezapop_race_ethnicity_10_16_county_level, by = "county_id") %>% 
+  mutate(placements_per_10k_youth = round(placement_case_count/overall_10_16_population*10000, digits = 1))
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- df_mi_front_end_analytic_county %>%
+  pull(placements_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_petition_rate <- c("1399 to 1944","1152 to 1399","859 to 1152", "400 to 859")
+
+### create a new variable with the specified quantiles
+df_mi_front_end_analytic_county %<>%
+  mutate(placements_per_10k_youth_quartile = cut(-placements_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_petition_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+### plot
+ggplot(data = df_mi_front_end_analytic_county,
+            mapping = aes(x = reorder(county_anonymous, placements_per_10k_youth), y = placements_per_10k_youth, fill = placements_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color = "gray40") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(2050))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 5, y = 1250, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Petitions per 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
 ```
 
 <br><br>
@@ -588,6 +703,68 @@ kable(petition_count_age_table_combined, format.args = list(big.mark = ","), ali
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
   row_spec(6, bold = TRUE)
+```
+
+<br><br>
+
+### Adjudications per 10k youth by county, 2016-2020
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### create overall file for numerator in % calculation below
+df_mi_front_end_analytic_county_adj <- df_mi_front_end_analytic %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+         !is.na(county_id)==TRUE) %>% 
+  distinct(pet_id,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
+  group_by(county_id) %>% 
+  summarize(adjudication_case_count = n_distinct(pet_id[disp_desc=="Adjudication" & age>=10 & age <17])) %>% 
+  ungroup() %>% 
+  left_join(df_ezapop_race_ethnicity_10_16_county_level, by = "county_id") %>% 
+  mutate(adjudications_per_10k_youth = round(adjudication_case_count/overall_10_16_population*10000, digits = 1))
+
+### create quantiles object
+no_classes <- 4
+
+### extract quantiles from var we're mapping
+quantiles <- df_mi_front_end_analytic_county_adj %>%
+  pull(adjudications_per_10k_youth) %>%
+  quantile(probs = seq(0, 1, length.out = no_classes + 1), na.rm=TRUE) %>%
+  as.vector() 
+
+### make labels youth pop
+label_adj_rate <- c("520 to 841","396 to 520","230 to 396", "17 to 230")
+
+### create a new variable with the specified quantiles
+df_mi_front_end_analytic_county_adj %<>%
+  mutate(adjudication_per_10k_youth_quartile = cut(-adjudications_per_10k_youth,
+                               breaks = -quantiles,
+                               right = TRUE,
+                               labels = label_adj_rate,
+                               include.lowest = T)) %>% 
+  mutate(county_anonymous = paste0("County ", row_number())) 
+
+
+### plot
+ggplot(data = df_mi_front_end_analytic_county_adj,
+            mapping = aes(x = reorder(county_anonymous, adjudications_per_10k_youth), y = adjudications_per_10k_youth, fill = adjudication_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color = "gray40") +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(limits=c(min(0), 
+                                           max(850))) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  annotate("text", x = 15, y = 650, label = "Each bar represents one county's\n adjudication rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = NULL, x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Adjudications per 10k Youth") +
+    coord_flip() +
+  guides(fill = guide_legend(reverse = FALSE)) 
 ```
 
 <br><br>
