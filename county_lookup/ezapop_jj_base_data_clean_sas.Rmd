@@ -1,0 +1,170 @@
+---
+title: "ezapop_jj_base_clean_sas"
+output: html_document
+---
+
+Purpose of syntax: To create a county-level juvenile population lookup table w/ race/ethnicity and gender for state of interest. The American Community Survey does not publicly report out population estimates for youth 10-17 (or 10-16 when relevant) at the county level and disaggregated by race/ethnicity and gender. Instead, I am pulling from Census Bureau ACS data provided to the CDC/National Center for Health Statistics which provides single year-of-age- estimate at the county level "to meet programmatic needs such as the creation of age groupings that differ from the standard groupings used by the Census Bureau." This is also the source used by Ezapop, which was developed by OJJDP and NCJJ: https://www.ojjdp.gov/ojstatbb/ezapop/asp/source.asp
+
+Because of concerns about reliability of single year-of-age estimates at the county-level, I am grouping age together (usually 10-17) and pulling estimates from 5 years of data (taking the mean across the five years), 2015-2019. 
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven")
+```
+
+```{r}
+### pull in raw sas files from: https://www.cdc.gov/nchs/nvss/bridged_race/data_documentation.htm#vintage2019
+### file documentation here: https://www.cdc.gov/nchs/nvss/bridged_race/Documentation-BridgedPostcenV2019.pdf
+### NOTE: we're pulling 5 years of data and then averaging across all files -- this is the approach that the american community survey takes for making more reliable estimates at the county/tract level (see more explanation/rationale here: https://www.census.gov/programs-surveys/acs/guidance/estimates.html)
+
+### soft code state for easy substitution of new states, using fips code (e.g. indiana is 18, michigan is 26, etc.)
+state_to_pull <- svDialogs::dlg_input(message = "Enter state FIPS code", default = "")$res
+
+### pull 2019 flat file
+df_acs_bridged_age_race_sex_19 <- haven::read_sas("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Syntax\\ezapop_raw_data_file\\pcen_v2019_y19.sas7bdat") %>% 
+  zap_label() %>%  ### remove sas column labels 
+  clean_names() %>% 
+  filter(st_fips == as.numeric(state_to_pull)) ### this is where we filter on state
+
+### pull 2018 flat file
+df_acs_bridged_age_race_sex_18 <- haven::read_sas("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Syntax\\ezapop_raw_data_file\\pcen_v2019_y18.sas7bdat") %>% 
+  zap_label() %>%  ### remove sas column labels 
+  clean_names() %>% 
+  filter(st_fips == as.numeric(state_to_pull)) ### this is where we filter on state
+
+### pull 2017 flat file
+df_acs_bridged_age_race_sex_17 <- haven::read_sas("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Syntax\\ezapop_raw_data_file\\pcen_v2019_y17.sas7bdat") %>% 
+  zap_label() %>%  ### remove sas column labels 
+  clean_names() %>% 
+  filter(st_fips == as.numeric(state_to_pull)) ### this is where we filter on state
+
+### pull 2016 flat file
+df_acs_bridged_age_race_sex_16 <- haven::read_sas("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Syntax\\ezapop_raw_data_file\\pcen_v2019_y16.sas7bdat") %>% 
+  zap_label() %>%  ### remove sas column labels 
+  clean_names() %>% 
+  filter(st_fips == as.numeric(state_to_pull)) ### this is where we filter on state
+
+### pull 2015 flat file
+df_acs_bridged_age_race_sex_15 <- haven::read_sas("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - JJ_Indiana - JJ_Indiana\\Data\\Syntax\\ezapop_raw_data_file\\pcen_v2019_y15.sas7bdat") %>% 
+  zap_label() %>%  ### remove sas column labels 
+  clean_names() %>% 
+  filter(st_fips == as.numeric(state_to_pull)) ### this is where we filter on state
+
+### combine all five years for averaging -- stacking all five dataframes together
+### documentation for race, ethnicity, sex recoding:
+### racesex: 1=White male; 2=White female; 3=Black male; 4=Black female; 5=American Indian or Alaska Native male; 6=American Indian or Alaska Native female; 7=Asian or Pacific Islander male; 8=Asian or Pacific Islander female
+### hisp: 1=not Hispanic or Latino; 2=Hispanic or Latino
+
+df_acs_bridged_age_race_sex_15_19_raw <- dplyr::bind_rows(df_acs_bridged_age_race_sex_15,df_acs_bridged_age_race_sex_16,df_acs_bridged_age_race_sex_17,df_acs_bridged_age_race_sex_18,df_acs_bridged_age_race_sex_19) %>% 
+  filter(age<=17 & age>=10) %>% ### filter file off juvenile base population of interest -- youth ages 10 to 17 
+  mutate(racesex = factor(racesex,
+         levels = c(1,2,3,4,5,6,7,8),
+         labels = c("white_male", "white_female", "black_male", "black_female","am_in_ak_native_male","am_in_ak_native_female","asian_pi_male","asian_pi_female")),
+         hisp = factor(hisp,
+         levels = c(1,2),
+         labels = c("not_hispanic", "hispanic"))) %>% ### use factor function to assign labels to values)  ### use factor function to assign labels to values
+  dplyr::select(-c(race4,vintage,st_fips,month))
+```
+
+```{r}
+### average pop totals across ages and years, rounding to nearest whole number
+df_acs_bridged_age_race_sex_15_19_grouped <- df_acs_bridged_age_race_sex_15_19_raw %>%
+  group_by(co_fips,hisp,racesex) %>% ### group by co_fips, hisp, and racesex to group across age and year
+  summarise(pop = round(sum(pop)/5, digits = 0)) %>% ### sum across ages and years divided by 5 years of data to reach mean 10-17 population per year from 2015-2019
+  ungroup()
+
+### pivot stacked dataframe wide by age, year, and co_fips to see all race, ethnicity, and sex breakdowns by county, year, and age to sum across subgroups
+df_acs_bridged_age_race_sex_15_19_wide <- df_acs_bridged_age_race_sex_15_19_grouped %>% 
+  pivot_wider(names_from = c(hisp,racesex), values_from = pop) %>% 
+  mutate(state = "Michigan")
+
+### combine race and sex columns into several new overall columns for race/ethnicity overall, race overall w/o ethnicity, and sex overall
+df_acs_bridged_age_race_sex_15_19_final <- df_acs_bridged_age_race_sex_15_19_wide %>% 
+  mutate(not_hispanic_white = not_hispanic_white_male + not_hispanic_white_female,
+         not_hispanic_black = not_hispanic_black_male + not_hispanic_black_female,
+         not_hispanic_am_in_ak_native = not_hispanic_am_in_ak_native_male + not_hispanic_am_in_ak_native_female,
+         not_hispanic_asian_pi = not_hispanic_asian_pi_male + not_hispanic_asian_pi_female,
+         hispanic_white = hispanic_white_male + hispanic_white_female,
+         hispanic_black = hispanic_black_male + hispanic_black_female,
+         hispanic_am_in_ak_native = hispanic_am_in_ak_native_male + hispanic_am_in_ak_native_female,
+         hispanic_asian_pi = hispanic_asian_pi_male + hispanic_asian_pi_female,
+         hispanic_any_race = hispanic_white + hispanic_black + hispanic_am_in_ak_native + hispanic_asian_pi,
+         overall_white = not_hispanic_white + hispanic_white,
+         overall_black = not_hispanic_black + hispanic_black,
+         overall_am_in_ak_native = not_hispanic_am_in_ak_native + hispanic_am_in_ak_native,
+         overall_asian_pi = not_hispanic_asian_pi + hispanic_asian_pi,
+         overall_male = not_hispanic_white_male + not_hispanic_black_male + not_hispanic_am_in_ak_native_male + not_hispanic_asian_pi_male + hispanic_white_male + hispanic_black_male + hispanic_am_in_ak_native_male + hispanic_asian_pi_male,
+         overall_female = not_hispanic_white_female + not_hispanic_black_female + not_hispanic_am_in_ak_native_female + not_hispanic_asian_pi_female + hispanic_white_female + hispanic_black_female + hispanic_am_in_ak_native_female + hispanic_asian_pi_female,
+         overall_10_17_population = overall_male + overall_female) %>% 
+  dplyr::select(co_fips,overall_10_17_population,overall_female,overall_male,overall_asian_pi,overall_am_in_ak_native,overall_black,overall_white,hispanic_asian_pi,hispanic_am_in_ak_native,hispanic_black,hispanic_white,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white)
+
+### aggregate to state level
+### combine race and sex columns into several new overall columns for race/ethnicity overall, race overall w/o ethnicity, and sex overall
+df_acs_bridged_age_race_sex_15_19_final_state_agg <- df_acs_bridged_age_race_sex_15_19_wide %>% 
+  group_by(state) %>% 
+  summarize(not_hispanic_white = sum(not_hispanic_white_male + not_hispanic_white_female),
+         not_hispanic_black = sum(not_hispanic_black_male + not_hispanic_black_female),
+         not_hispanic_am_in_ak_native = sum(not_hispanic_am_in_ak_native_male + not_hispanic_am_in_ak_native_female),
+         not_hispanic_asian_pi = sum(not_hispanic_asian_pi_male + not_hispanic_asian_pi_female),
+         hispanic_white = sum(hispanic_white_male + hispanic_white_female),
+         hispanic_black = sum(hispanic_black_male + hispanic_black_female),
+         hispanic_am_in_ak_native = sum(hispanic_am_in_ak_native_male + hispanic_am_in_ak_native_female),
+         hispanic_asian_pi = sum(hispanic_asian_pi_male + hispanic_asian_pi_female),
+         hispanic_any_race = sum(hispanic_white + hispanic_black + hispanic_am_in_ak_native + hispanic_asian_pi),
+         overall_white = sum(not_hispanic_white + hispanic_white),
+         overall_black = sum(not_hispanic_black + hispanic_black),
+         overall_am_in_ak_native = sum(not_hispanic_am_in_ak_native + hispanic_am_in_ak_native),
+         overall_asian_pi = sum(not_hispanic_asian_pi + hispanic_asian_pi),
+         overall_male = sum(not_hispanic_white_male + not_hispanic_black_male + not_hispanic_am_in_ak_native_male + not_hispanic_asian_pi_male + hispanic_white_male + hispanic_black_male + hispanic_am_in_ak_native_male + hispanic_asian_pi_male),
+         overall_female = sum(not_hispanic_white_female + not_hispanic_black_female + not_hispanic_am_in_ak_native_female + not_hispanic_asian_pi_female + hispanic_white_female + hispanic_black_female + hispanic_am_in_ak_native_female + hispanic_asian_pi_female),
+         overall_10_17_population = sum(overall_male + overall_female)) %>% 
+  dplyr::select(state,overall_10_17_population,overall_female,overall_male,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white) %>% 
+  ungroup()
+
+### aggregate to state level, excluding wayne for mdhhs analysis that excludes wayne
+### combine race and sex columns into several new overall columns for race/ethnicity overall, race overall w/o ethnicity, and sex overall
+# df_acs_bridged_age_race_sex_15_19_final_state_agg_no_wayne <- df_acs_bridged_age_race_sex_15_19_wide %>% 
+#   filter(co_fips!=163) %>%  ### exclude wayne county -- county fips 26163
+#   group_by(state) %>% 
+#   summarize(not_hispanic_white = sum(not_hispanic_white_male + not_hispanic_white_female),
+#          not_hispanic_black = sum(not_hispanic_black_male + not_hispanic_black_female),
+#          not_hispanic_am_in_ak_native = sum(not_hispanic_am_in_ak_native_male + not_hispanic_am_in_ak_native_female),
+#          not_hispanic_asian_pi = sum(not_hispanic_asian_pi_male + not_hispanic_asian_pi_female),
+#          hispanic_white = sum(hispanic_white_male + hispanic_white_female),
+#          hispanic_black = sum(hispanic_black_male + hispanic_black_female),
+#          hispanic_am_in_ak_native = sum(hispanic_am_in_ak_native_male + hispanic_am_in_ak_native_female),
+#          hispanic_asian_pi = sum(hispanic_asian_pi_male + hispanic_asian_pi_female),
+#          hispanic_any_race = sum(hispanic_white + hispanic_black + hispanic_am_in_ak_native + hispanic_asian_pi),
+#          overall_white = sum(not_hispanic_white + hispanic_white),
+#          overall_black = sum(not_hispanic_black + hispanic_black),
+#          overall_am_in_ak_native = sum(not_hispanic_am_in_ak_native + hispanic_am_in_ak_native),
+#          overall_asian_pi = sum(not_hispanic_asian_pi + hispanic_asian_pi),
+#          overall_male = sum(not_hispanic_white_male + not_hispanic_black_male + not_hispanic_am_in_ak_native_male + not_hispanic_asian_pi_male + hispanic_white_male + hispanic_black_male + hispanic_am_in_ak_native_male + hispanic_asian_pi_male),
+#          overall_female = sum(not_hispanic_white_female + not_hispanic_black_female + not_hispanic_am_in_ak_native_female + not_hispanic_asian_pi_female + hispanic_white_female + hispanic_black_female + hispanic_am_in_ak_native_female + hispanic_asian_pi_female),
+#          overall_10_17_population = sum(overall_male + overall_female)) %>% 
+#   dplyr::select(state,overall_10_17_population,overall_female,overall_male,hispanic_any_race,not_hispanic_asian_pi,not_hispanic_am_in_ak_native,not_hispanic_black,not_hispanic_white) %>% 
+#   ungroup()
+```
+
+```{r}
+### pull in state + county fips lookup table to add county name to datafile via tidycensus function fips_codes
+df_fips_lookup <- fips_codes %>% 
+  filter(state_code == as.numeric(state_to_pull)) %>% ### this is where we filter on state
+  mutate(co_fips = as.numeric(county_code)) %>% ### create co_fips for merge with df_acs_bridged_age_race_sex_15_19_final
+  rename(county_name = county)
+
+### left join fips_lookup and df_acs_bridged_age_race_sex_15_19_final (left joining df_acs_bridged_age_race_sex_15_19_final b/c there may be cases where a county is missing demographic acs data but we'd want to include the county name/fips code in the final file anyways; the lookup will have all counties regardless of missingness)
+df_acs_bridged_age_race_sex_15_19_final <- left_join(df_fips_lookup, df_acs_bridged_age_race_sex_15_19_final, by = "co_fips")
+```
+
+```{r}
+### write out final file for incorporation into base juvenile population rate calculations -- wayne exclude for mdhhs analysis
+# readr::write_delim(df_acs_bridged_age_race_sex_15_19_final_state_agg_no_wayne,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi_state_level_no_wayne.txt" , delim = "|")
+
+### write out final file for incorporation into base juvenile population rate calculations
+readr::write_delim(df_acs_bridged_age_race_sex_15_19_final_state_agg,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi_state_level.txt" , delim = "|")
+
+### write out final file for incorporation into base juvenile population rate calculations
+readr::write_delim(df_acs_bridged_age_race_sex_15_19_final,"C:\\Users\\abyrum\\OneDrive - The Council of State Governments\\ezapop_raw_data_file\\Michigan\\ezapop_10_17_race_eth_sex_mi.txt" , delim = "|")
+```
