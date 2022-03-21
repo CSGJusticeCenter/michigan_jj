@@ -38,6 +38,9 @@
 │   │    |   |   |   ├── michigan_jj_placement_data_mapping.Rmd # create data file diagram w/ relationships
 │   │    |   ├── Data Viz/
 │   │    |   |   |   ├── mdhhs_placement_viz.Rmd # syntax for mdhhs viz for ppt
+│   ├── county_lookup/           
+│   │    |   ├── ezapop_jj_base_data_clean_sas.rmd # syntax to create county-level juvenile population estimates
+|
 |
 ├── Join_analytic_files.R  # join standardized data from kalamazoo, wayne, tcs, and pcs for front end analysis
 ├── MI_JJ_crosstabs.R  # cross tab syntax for front end analysis with analytic file
