@@ -56,7 +56,6 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
 
 *Count/Proportion By Demographics:*
 
-<br>
 
 * Year
 
@@ -74,7 +73,6 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
 
 *Count/Proportion By Demographics:*
 
-<br>
 
 * Year
 
@@ -84,14 +82,12 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
 
 * Categorical Age (recoded)
 
-
 <br>
 
 **3. Number of unique petitions adjudicated/non-adjudicated/other (disp_desc)**
 
 *Count/Proportion By Demographics:*
 
-<br>
 
 * Year
 
@@ -109,21 +105,21 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
 
 <br>
 
-### Count/Proportion by Year
+### Count/Proportion by Year, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 petition_count_year_denom <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
 petition_count_year_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
   group_by(petition_year) %>% 
   summarise(`Petitions (N)` = n_distinct(pet_id), 
             `Petitions (%)` = round(n_distinct(pet_id)/petition_count_year_denom$`Petition N`*100, digits = 1)) %>% 
   ungroup() 
 
 petition_count_year_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
   summarise(`Petitions (N)` = n_distinct(pet_id), 
             `Petitions (%)` = round(n_distinct(pet_id)/petition_count_year_denom$`Petition N`*100, digits = 1)) %>% 
   mutate(petition_year = "Overall")
@@ -135,20 +131,20 @@ petition_count_year_table_combined <- rbind(petition_count_year_table,petition_c
 kable(petition_count_year_table_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
+  row_spec(5, bold = TRUE)
 ```
 
 <br><br>
 
-### Count/Proportion by Race/Ethnicity (missing race/ethnicity data for 12% of petitions)
+### Count/Proportion by Race/Ethnicity (missing race/ethnicity data for 12% of petitions), 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 petition_count_race_denom <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(race_ethnic)==TRUE) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
 petition_count_race_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(race_ethnic)==TRUE) %>% 
   group_by(race_ethnic) %>% 
   summarise(`Petitions (N)` = n_distinct(pet_id), 
@@ -163,15 +159,15 @@ kable(petition_count_race_table, format.args = list(big.mark = ","), align=rep('
 
 <br><br>
 
-### Count/Proportion by Gender 
+### Count/Proportion by Gender, 2016-2019 
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 petition_count_gender_denom <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(sex)==TRUE) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
 petition_count_gender_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(sex)==TRUE) %>% 
   group_by(sex) %>% 
   summarise(`Petitions (N)` = n_distinct(pet_id), 
@@ -186,35 +182,35 @@ kable(petition_count_gender_table, format.args = list(big.mark = ","), align=rep
 
 <br><br>
 
-### Count/Proportion by Offense
+### Count/Proportion by Offense, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 ### most serious petitioned offense
 petition_count_off_denom_pet <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(off_lvl_pet)==TRUE) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
 petition_count_off_table_pet <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(off_lvl_pet)==TRUE) %>% 
   group_by(off_lvl_pet) %>% 
-  summarise(`Petitions, at Petition (N)` = n_distinct(pet_id), 
-            `Petitions, at Petition (%)` = round(n_distinct(pet_id)/petition_count_off_denom_pet$`Petition N`*100, digits = 1)) %>% 
+  summarise(`Petitions (pet offense) (N)` = n_distinct(pet_id), 
+            `Petitions (pet offense) (%)` = round(n_distinct(pet_id)/petition_count_off_denom_pet$`Petition N`*100, digits = 1)) %>% 
   ungroup() %>% 
   rename(off_lvl = off_lvl_pet)
 
 ### most serious adjudicated offense
 petition_count_off_denom_adj <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(off_lvl_disp)==TRUE) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
 petition_count_off_table_adj <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(off_lvl_disp)==TRUE) %>% 
   group_by(off_lvl_disp) %>% 
-  summarise(`Petitions, at Adjudication (N)` = n_distinct(pet_id), 
-            `Petitions, at Adjudication (%)` = round(n_distinct(pet_id)/petition_count_off_denom_adj$`Petition N`*100, digits = 1)) %>% 
+  summarise(`Petitions (adj offense)` = n_distinct(pet_id), 
+            `Petitions (adj offense) (%)` = round(n_distinct(pet_id)/petition_count_off_denom_adj$`Petition N`*100, digits = 1)) %>% 
   ungroup() %>% 
   rename(off_lvl = off_lvl_disp)
 
@@ -229,15 +225,15 @@ kable(petition_count_off_table, format.args = list(big.mark = ","), align=rep('c
 
 <br><br>
 
-### Count/Proportion by Age
+### Count/Proportion by Age, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 petition_count_age_denom <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(age_cat)==TRUE) %>% 
   summarise(`Petition N` = n_distinct(pet_id)) 
 
 petition_count_age_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(age_cat)==TRUE) %>% 
   group_by(age_cat) %>% 
   summarise(`Petitions (N)` = n_distinct(pet_id), 
@@ -252,7 +248,7 @@ kable(petition_count_age_table, format.args = list(big.mark = ","), align=rep('c
 
 <br><br>
 
-### Petitions per 10k youth by county, 2016-2020
+### Petitions per 10k youth by county, 2016-2019
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### set theme for now
 theme_set(theme_minimal())
@@ -265,7 +261,7 @@ df_ezapop_race_ethnicity_10_16_county_level <- readr::read_delim("C:\\Users\\aby
 
 ### create overall file for numerator in % calculation below
 df_mi_front_end_analytic_county <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(county_id)==TRUE) %>% 
   distinct(pet_id,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
   group_by(county_id) %>% 
@@ -284,7 +280,7 @@ quantiles <- df_mi_front_end_analytic_county %>%
   as.vector() 
 
 ### make labels youth pop
-label_petition_rate <- c("1399 to 1944","1152 to 1399","859 to 1152", "400 to 859")
+label_petition_rate <- c("1154 to 1671","950 to 1154","714 to 950", "340 to 714")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county %<>%
@@ -302,9 +298,9 @@ ggplot(data = df_mi_front_end_analytic_county,
   geom_bar(stat = "identity", color = "gray40") +
   scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
   scale_y_continuous(limits=c(min(0), 
-                                           max(2050))) +
+                                           max(1850))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 5, y = 1250, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 1650, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
@@ -323,31 +319,28 @@ ggplot(data = df_mi_front_end_analytic_county,
 
 <br><br>
 
-## Consent Calendar
+## Consent Calendar (TCS & PCS only)
 
 <br>
 
-### Count/Proportion by Year
-
-Note: Consent Calendar % is out of counties with consent calendar practice/data (PCS and TCS only) -- noted as "Consent Calendar Eligible"
+### Count/Proportion by Year, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_cc_count_year_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+df_mi_front_end_analytic_consent <- df_mi_front_end_analytic %>% 
+  filter(!is.na(cc_ind)==TRUE)
+
+petition_cc_count_year_table <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
   group_by(petition_year) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_cc_count_year_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+petition_cc_count_year_table_overall <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(petition_year = "Overall")
 
 ### combine
@@ -357,34 +350,28 @@ petition_cc_count_year_table_combined <- rbind(petition_cc_count_year_table,peti
 kable(petition_cc_count_year_table_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
+  row_spec(5, bold = TRUE)
 ```
 
 <br><br>
 
-### Count/Proportion by Race/Ethnicity (missing race/ethnicity data for 12% of petitions)
-
-Note: Consent Calendar % is out of counties with consent calendar practice/data (PCS and TCS only) -- noted as "Consent Calendar Eligible"
+### Count/Proportion by Race/Ethnicity (missing race/ethnicity data for 12% of petitions), 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_race_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_race_table <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(race_ethnic)==TRUE) %>% 
   group_by(race_ethnic) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_count_race_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_race_table_overall <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(race_ethnic)==TRUE) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(race_ethnic = "Overall")
 
 ### combine
@@ -399,29 +386,23 @@ kable(petition_count_race_table_combined, format.args = list(big.mark = ","), al
 
 <br><br>
 
-### Count/Proportion by Gender 
-
-Note: Consent Calendar % is out of counties with consent calendar practice/data (PCS and TCS only) -- noted as "Consent Calendar Eligible"
+### Count/Proportion by Gender, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_gender_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_gender_table <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(sex)==TRUE) %>% 
   group_by(sex) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_count_gender_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_gender_table_overall <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(sex)==TRUE) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(sex = "Overall")
 
 ### combine
@@ -436,30 +417,24 @@ kable(petition_count_gender_table_combined, format.args = list(big.mark = ","), 
 
 <br><br>
 
-### Count/Proportion by Offense (off_lvl_disp; most serious adjudicated offense)
-
-Note: Consent Calendar % is out of counties with consent calendar practice/data (PCS and TCS only) -- noted as "Consent Calendar Eligible"
+### Count/Proportion by Offense (most serious petitioned offense), 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_off_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(off_lvl_disp)==TRUE) %>% 
-  group_by(off_lvl_disp) %>% 
+petition_count_off_table <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
+         !is.na(off_lvl_pet)==TRUE) %>% 
+  group_by(off_lvl_pet) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_count_off_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(off_lvl_disp)==TRUE) %>% 
+petition_count_off_table_overall <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
+         !is.na(off_lvl_pet)==TRUE) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
-  mutate(off_lvl_disp = "Overall")
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
+  mutate(off_lvl_pet = "Overall")
 
 ### combine
 petition_count_off_table_combined <- rbind(petition_count_off_table,petition_count_off_table_overall)
@@ -473,29 +448,23 @@ kable(petition_count_off_table_combined, format.args = list(big.mark = ","), ali
 
 <br><br>
 
-### Count/Proportion by Age
-
-Note: Consent Calendar % is out of counties with consent calendar practice/data (PCS and TCS only) -- noted as "Consent Calendar Eligible"
+### Count/Proportion by Age, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_age_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_age_table <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(age_cat)==TRUE) %>% 
   group_by(age_cat) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_count_age_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_age_table_overall <- df_mi_front_end_analytic_consent %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(age_cat)==TRUE) %>% 
   summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, Consent Calendar Eligible (N)` = n_distinct(pet_id[!is.na(cc_ind)==TRUE]),
-            `Petitions, Consent Calendar Eligible (%)` = round(n_distinct(pet_id[!is.na(cc_ind)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
             `Petitions, Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]), 
-            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Consent Calendar Eligible (N)`*100, digits = 1)) %>% 
+            `Petitions, Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(age_cat = "Overall") 
 
 ### combine
@@ -505,7 +474,7 @@ petition_count_age_table_combined <- rbind(petition_count_age_table,petition_cou
 kable(petition_count_age_table_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
+  row_spec(5, bold = TRUE)
 ```
 
 <br><br>
@@ -514,29 +483,30 @@ kable(petition_count_age_table_combined, format.args = list(big.mark = ","), ali
 
 <br>
 
-### Count/Proportion by Year
+### Count/Proportion by Year, 2016-2019
 
-Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s
+Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s (8% of all petitions). Consent calendar petitions also dropped -- is this correct??
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_cc_count_year_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+df_mi_front_end_analytic_adjudication <- df_mi_front_end_analytic %>% 
+  filter(cc_ind==0 | is.na(cc_ind)==TRUE)
+
+petition_cc_count_year_table <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
   group_by(petition_year) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_cc_count_year_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+petition_cc_count_year_table_overall <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(petition_year = "Overall")
 
 ### combine
@@ -546,36 +516,34 @@ petition_cc_count_year_table_combined <- rbind(petition_cc_count_year_table,peti
 kable(petition_cc_count_year_table_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
+  row_spec(5, bold = TRUE)
 ```
 
 <br><br>
 
-### Count/Proportion by Race/Ethnicity (missing race/ethnicity data for 12% of petitions)
+### Count/Proportion by Race/Ethnicity (missing race/ethnicity data for 12% of petitions), 2016-2019
 
-Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s
+Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s (8% of all petitions). Consent calendar petitions also dropped -- is this correct??
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_race_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_race_table <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(race_ethnic)==TRUE) %>% 
   group_by(race_ethnic) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>%  
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>%   
   ungroup() 
 
-petition_count_race_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_race_table_overall <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(race_ethnic)==TRUE) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(race_ethnic = "Overall")
 
 ### combine
@@ -590,31 +558,29 @@ kable(petition_count_race_table_combined, format.args = list(big.mark = ","), al
 
 <br><br>
 
-### Count/Proportion by Gender 
+### Count/Proportion by Gender, 2016-2019
 
-Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s
+Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s (8% of all petitions). Consent calendar petitions also dropped -- is this correct??
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_gender_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_gender_table <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(sex)==TRUE) %>% 
   group_by(sex) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_count_gender_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_gender_table_overall <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(sex)==TRUE) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(sex = "Overall")
 
 ### combine
@@ -629,38 +595,68 @@ kable(petition_count_gender_table_combined, format.args = list(big.mark = ","), 
 
 <br><br>
 
-### Count/Proportion by Offense (off_lvl_disp; most serious adjudicated offense)
+### Count/Proportion by Offense (both most serious petitioned offense), 2016-2019
 
-Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s
+Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s (8% of all petitions). Consent calendar petitions also dropped -- is this correct??
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_off_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(off_lvl_disp)==TRUE) %>% 
-  group_by(off_lvl_disp) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
-  ungroup() 
+# ### petitioned
+# petition_count_off_table_pet <- df_mi_front_end_analytic %>% 
+#   filter(petition_year%in%c(2016,2017,2018,2019),
+#          !is.na(off_lvl_pet)==TRUE) %>% 
+#   group_by(off_lvl_pet) %>% 
+#   summarise(`Petitions, Petitioned Offense (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+#             `Adjudication, Petitioned Offense (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+#             `Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+#             `Non-Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+#             `Other, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
+#   ungroup() %>% 
+#   rename(off_lvl = off_lvl_pet)
+# 
+# petition_count_off_table_overall_pet <- df_mi_front_end_analytic %>% 
+#   filter(petition_year%in%c(2016,2017,2018,2019),
+#          !is.na(off_lvl_pet)==TRUE) %>% 
+#   summarise(`Petitions, Petitioned Offense (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+#             `Adjudication, Petitioned Offense (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+#             `Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+#             `Non-Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+#             `Other, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>%  
+#   mutate(off_lvl = "Overall")
+# 
+# ### combine
+# petition_count_off_table_pet_combined <- rbind(petition_count_off_table_pet,petition_count_off_table_overall_pet)
 
-petition_count_off_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
-         !is.na(off_lvl_disp)==TRUE) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
-  mutate(off_lvl_disp = "Overall")
+### adjudicated
+petition_count_off_table_adj <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
+         !is.na(off_lvl_pet)==TRUE) %>% 
+  group_by(off_lvl_pet) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
+  ungroup() %>% 
+  rename(off_lvl = off_lvl_pet)
+
+petition_count_off_table_overall_adj <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
+         !is.na(off_lvl_pet)==TRUE) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
+  mutate(off_lvl = "Overall")
 
 ### combine
-petition_count_off_table_combined <- rbind(petition_count_off_table,petition_count_off_table_overall)
+petition_count_off_table_adj_combined <- rbind(petition_count_off_table_adj,petition_count_off_table_overall_adj)
+
+# ### join both final offense tables
+# ### join two tables
+# adjudication_count_off_table_final <- left_join(petition_count_off_table_pet_combined,petition_count_off_table_adj_combined, by = "off_lvl")
 
 ### print table via kableextra
-kable(petition_count_off_table_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
+kable(petition_count_off_table_adj_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
   row_spec(7, bold = TRUE)
@@ -668,31 +664,29 @@ kable(petition_count_off_table_combined, format.args = list(big.mark = ","), ali
 
 <br><br>
 
-### Count/Proportion by Age
+### Count/Proportion by Age, 2016-2019
 
-Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s
+Note: Petitions with Missing Adjudication (what MI calls disposition) data dropped from Adjudication/Non-Adjudication/Other %'s (8% of all petitions). Consent calendar petitions also dropped -- is this correct??
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-petition_count_age_table <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_age_table <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(age_cat)==TRUE) %>% 
   group_by(age_cat) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   ungroup() 
 
-petition_count_age_table_overall <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+petition_count_age_table_overall <- df_mi_front_end_analytic_adjudication %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(age_cat)==TRUE) %>% 
-  summarise(`Petitions, Overall (N)` = n_distinct(pet_id), 
-            `Petitions, with Adj Data (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]),
-            `Petitions, with Adj Data (%)` = round(n_distinct(pet_id[!is.na(disp_desc)==TRUE])/`Petitions, Overall (N)`*100, digits = 1),
-            `Petitions, Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, with Adj Data (N)`*100, digits = 1),
-            `Petitions, Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, with Adj Data (N)`*100, digits = 1)) %>% 
+  summarise(`Petitions, Overall (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Non-Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
+            `Other (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
   mutate(age_cat = "Overall") 
 
 ### combine
@@ -702,16 +696,16 @@ petition_count_age_table_combined <- rbind(petition_count_age_table,petition_cou
 kable(petition_count_age_table_combined, format.args = list(big.mark = ","), align=rep('c')) %>%
    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
                  row_label_position = "l") %>% 
-  row_spec(6, bold = TRUE)
+  row_spec(5, bold = TRUE)
 ```
 
 <br><br>
 
-### Adjudications per 10k youth by county, 2016-2020
+### Adjudications per 10k youth by county, 2016-2019
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### create overall file for numerator in % calculation below
 df_mi_front_end_analytic_county_adj <- df_mi_front_end_analytic %>% 
-  filter(petition_year%in%c(2016,2017,2018,2019,2020),
+  filter(petition_year%in%c(2016,2017,2018,2019),
          !is.na(county_id)==TRUE) %>% 
   distinct(pet_id,.keep_all = TRUE) %>% ### de-dup by person and placement episode since we want to take the mean of a value duplicated across all placements within placement episode; we want one record per youth per placement episode where there is county data
   group_by(county_id) %>% 
@@ -730,7 +724,7 @@ quantiles <- df_mi_front_end_analytic_county_adj %>%
   as.vector() 
 
 ### make labels youth pop
-label_adj_rate <- c("520 to 841","396 to 520","230 to 396", "17 to 230")
+label_adj_rate <- c("432 to 718","330 to 432","195 to 330", "17 to 195")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county_adj %<>%
@@ -768,3 +762,43 @@ ggplot(data = df_mi_front_end_analytic_county_adj,
 ```
 
 <br><br>
+
+## Trends over Time, 2016-2020
+
+<br>
+
+### Petitions, Consent Calendar %, Adjudication %: 2016 - 2020
+```{r echo=FALSE,warning=FALSE, message=FALSE}
+### 2016-2020
+petition_count_year_table_2016_2020 <- df_mi_front_end_analytic %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  group_by(petition_year) %>% 
+  summarise(`Petitions (N)` = n_distinct(pet_id), 
+            `Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]),
+            `Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/n_distinct(pet_id[!is.na(cc_ind)==TRUE])*100, digits = 1),
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/n_distinct(pet_id[!is.na(disp_desc)==TRUE & (cc_ind==0 | is.na(cc_ind)==TRUE)])*100, digits = 1)) %>% 
+  ungroup() 
+
+
+petition_count_year_table_overall <- df_mi_front_end_analytic %>% 
+  filter(petition_year%in%c(2016,2017,2018,2019,2020)) %>% 
+  summarise(`Petitions (N)` = n_distinct(pet_id), 
+            `Consent Calendar (N)` = n_distinct(pet_id[cc_ind==1]),
+            `Consent Calendar (%)` = round(n_distinct(pet_id[cc_ind==1])/n_distinct(pet_id[!is.na(cc_ind)==TRUE])*100, digits = 1),
+            `Adjudication (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
+            `Adjudication (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/n_distinct(pet_id[!is.na(disp_desc)==TRUE & (cc_ind==0 | is.na(cc_ind)==TRUE)])*100, digits = 1)) %>% 
+  mutate(petition_year = "Overall")
+
+### combine
+petition_count_year_table_combined_grouped <- rbind(petition_count_year_table_2016_2020,petition_count_year_table_overall)
+
+### print table via kableextra
+kable(petition_count_year_table_combined_grouped, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") %>% 
+  row_spec(6, bold = TRUE)
+```
+
+<br><br>
+
