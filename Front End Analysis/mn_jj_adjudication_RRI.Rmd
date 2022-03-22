@@ -1,0 +1,219 @@
+---
+title: "<center><b>MI: JJ</b></center>"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+# packages / set.seed
+library(csgjcr)
+library(tidyverse)
+library(lubridate)
+library(tidycensus)
+library(Hmisc)
+library(kableExtra)
+set.seed(1234)
+
+
+# file path to analytic files
+MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/")
+
+
+
+```
+
+
+
+```{r}
+
+# Import the MI joined analytic file
+Joined <- read_csv(file.path(MI_path, "Converted", "Final", "Analytic Files", "MI_JJ_joined_file.csv"), show_col_types = FALSE)
+
+
+# Import census data 2016-2020
+census_2020 <- haven::read_sas(file.path(MI_path, "Raw", "Census data", "pcen_v2020_y20.sas7bdat")) %>% 
+  filter(ST_FIPS %in% 26)
+
+census_2019 <- haven::read_sas(file.path(MI_path, "Raw", "Census data", "pcen_v2020_y19.sas7bdat")) %>% 
+  filter(ST_FIPS %in% 26) 
+
+census_2018 <- haven::read_sas(file.path(MI_path, "Raw", "Census data", "pcen_v2020_y18.sas7bdat")) %>% 
+  filter(ST_FIPS %in% 26) 
+
+census_2017 <- haven::read_sas(file.path(MI_path, "Raw", "Census data", "pcen_v2020_y17.sas7bdat")) %>% 
+  filter(ST_FIPS %in% 26) 
+
+census_2016 <- haven::read_sas(file.path(MI_path, "Raw", "Census data", "pcen_v2020_y16.sas7bdat")) %>% 
+  filter(ST_FIPS %in% 26)
+
+```
+
+
+
+
+```{r}
+
+#glimpse(fips_codes)
+
+MI_codes <- fips_codes %>% filter(state == "MI") %>%
+  mutate(county_id = as.double(paste0(state_code, county_code))) %>%
+  mutate(CO_FIPS = sub("^0+", "", county_code)) %>%
+  select(CO_FIPS, county_id, county)
+
+Joined <- Joined %>%
+  left_join(MI_codes, by = "county_id") %>%
+  mutate(race_ethn = case_when(race_ethnic %in% 1 ~ "white",
+                               race_ethnic %in% 2 ~ "black",
+                               race_ethnic %in% 3 ~ "hispanic",
+                               race_ethnic %in% 4 ~ "am_in_ak_native",
+                               race_ethnic %in% 5 ~ "asian_pi"))
+
+```
+
+
+
+```{r}
+
+# 1 = adjudication
+# 2 = non-adjuducation
+# 3 = other
+
+#Joined %>%
+#  filter(age %in% 10:16) %>%
+#  count(disp_desc)
+
+MI_codes <- MI_codes %>%
+  right_join(Joined, by = c("CO_FIPS", "county_id", "county")) %>%
+  distinct(CO_FIPS, county_id, county)
+
+```
+
+
+
+
+
+```{r}
+
+census_joined <- rbind(census_2016, census_2017, census_2018, census_2019, census_2020) %>%
+  filter(age <= 16 & age >= 10) %>%
+  mutate(race_sex = case_when(RACESEX %in% 1 & hisp %in% 2 ~ "hispanic_male",
+                              RACESEX %in% 2 & hisp %in% 2 ~ "hispanic_female",
+                              RACESEX %in% 3 & hisp %in% 2 ~ "hispanic_male",
+                              RACESEX %in% 4 & hisp %in% 2 ~ "hispanic_female",
+                              RACESEX %in% 5 & hisp %in% 2 ~ "hispanic_male",
+                              RACESEX %in% 6 & hisp %in% 2 ~ "hispanic_female",
+                              RACESEX %in% 7 & hisp %in% 2 ~ "hispanic_male",
+                              RACESEX %in% 8 & hisp %in% 2 ~ "hispanic_female",
+                              RACESEX %in% 1 ~ "white_male",
+                              RACESEX %in% 2 ~ "white_female",
+                              RACESEX %in% 3 ~ "black_male",
+                              RACESEX %in% 4 ~ "black_female",
+                              RACESEX %in% 5 ~ "am_in_ak_native_male",
+                              RACESEX %in% 6 ~ "am_in_ak_native_female",
+                              RACESEX %in% 7 ~ "asian_pi_male",
+                              RACESEX %in% 8 ~ "asian_pi_female")) %>%
+  relocate(race_sex, .after = "RACESEX") %>%
+  mutate(race_ethn = case_when(race_sex %in% "white_male" ~ "white",
+                               race_sex %in% "white_female" ~ "white",
+                               race_sex %in% "hispanic_male" ~ "hispanic",
+                               race_sex %in% "hispanic_female" ~ "hispanic",
+                               race_sex %in% "black_male" ~ "black",
+                               race_sex %in% "black_female" ~ "black",
+                               race_sex %in% "am_in_ak_native_male" ~ "am_in_ak_native",
+                               race_sex %in% "am_in_ak_native_female" ~ "am_in_ak_native",
+                               race_sex %in% "asian_pi_male" ~ "asian_pi",
+                               race_sex %in% "asian_pi_female" ~ "asian_pi")) %>%
+  relocate(race_ethn, .after = "race_sex")
+
+```
+
+
+
+```{r}
+
+census_grouped <- census_joined %>%
+  group_by(CO_FIPS, race_ethn) %>%
+  summarise(pop = round(sum(pop)/5, digits = 0), .groups = "drop") %>%
+  mutate(CO_FIPS = as.character(CO_FIPS)) %>%
+  right_join(MI_codes, by = "CO_FIPS") 
+
+Final_census <- census_grouped %>%
+  select(race_ethn, pop) %>%
+  group_by(race_ethn) %>% 
+  summarise(pop = sum(pop))
+
+```
+
+
+
+```{r include = FALSE}
+
+Joined %>%
+  distinct(kid_id, .keep_all = T) %>%
+  count(race_ethn, disp_desc) %>%
+  pivot_wider(names_from = disp_desc, values_from = n, values_fill = 0)
+
+
+
+
+
+```
+
+
+
+```{r}
+
+# Rates of Adjudication by race/ethnicity
+
+Final_set <- Joined %>%
+  filter(age <= 16 & age >= 10) %>%
+  filter(disp_desc %in% 1) %>% 
+  filter(race_ethn %nin% c(NA,"NA")) %>%
+  select(kid_id, age, race_ethn) %>%
+  distinct(kid_id, .keep_all = TRUE) %>%
+  count(race_ethn) %>%
+  rename(adjudications = "n") %>%
+  left_join(Final_census, by = "race_ethn") %>%
+  mutate(rate = round(adjudications / pop, digits = 3))
+
+
+```
+
+<br>
+<br>
+Rates are calculated based on average 10-16 YO population data from the years 2016-2020 for the relevant 32 counties. 
+Nothing has been done re: the consent calendar.
+All duplicate kid_ids have been removed.
+
+<br>
+
+```{r}
+
+Final_set %>%
+  select(race_ethn, adjudications, pop, rate) %>%
+  mutate(race_ethn = case_when(race_ethn %in% "am_in_ak_native" ~ "AI/AN",
+                               race_ethn %in% "asian_pi" ~ "A/PI",
+                               race_ethn %in% "hispanic" ~ "Hispanic",
+                               race_ethn %in% "white" ~ "White",
+                               race_ethn %in% "black" ~ "Black")) %>%
+  mutate(pop = scales::comma(pop),
+         adjudications = scales::comma(adjudications)) %>%
+  mutate(RRI = round(rate / 0.017, 3)) %>%
+  kbl(booktabs = F,
+      col.names = c("Race/Ethnicity","No of Adjudications","Population","Rate","RRI"),
+      caption = "<b><center>Rates of Adjudication by Race/Ethnicity (10-16 Year-Olds)</center></b>") %>%
+  kable_styling(full_width = T) #%>%
+  #row_spec(c(3,5), background = "khaki", bold = TRUE)
+
+
+
+```
+
+
+
+
+
+
+
+
