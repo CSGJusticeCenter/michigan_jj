@@ -17,7 +17,7 @@ libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer"
 MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/Final/Analytic Files")
 
 ### import final analytic file
-df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_file_v2.csv")) %>% 
+df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_file_v3.csv")) %>% 
   ### clean dates and add labels to vars we want to include in tables
   mutate(petition_date = mdy(petition_date),
          disp_date = mdy(disp_date),
