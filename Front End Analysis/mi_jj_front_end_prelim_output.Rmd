@@ -537,7 +537,7 @@ df_mi_front_end_analytic_county %<>%
 
 
 ### plot
-ggplot(data = df_mi_front_end_analytic_county,
+front_end_petition_rate_per_county <- ggplot(data = df_mi_front_end_analytic_county,
             mapping = aes(x = reorder(county_anonymous, petitions_per_10k_youth), y = petitions_per_10k_youth, fill = petitions_per_10k_youth_quartile)) + 
   geom_bar(stat = "identity", color="white", size=0.15) +
   scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
@@ -559,6 +559,10 @@ ggplot(data = df_mi_front_end_analytic_county,
       fill = "Petitions per 10k Youth") +
     coord_flip() +
   guides(fill = guide_legend(reverse = FALSE)) 
+
+front_end_petition_rate_per_county
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\front_end_ppt_03_12\\front_end_petition_rate_per_county.png", front_end_petition_rate_per_county, width = 8, height = 6)
 ```
 
 <br>
@@ -1073,7 +1077,7 @@ df_mi_front_end_analytic_county_adj %<>%
 
 
 ### plot
-ggplot(data = df_mi_front_end_analytic_county_adj,
+front_end_adjudication_rate_per_county <- ggplot(data = df_mi_front_end_analytic_county_adj,
             mapping = aes(x = reorder(county_anonymous, adjudications_per_10k_youth), y = adjudications_per_10k_youth, fill = adjudication_per_10k_youth_quartile)) + 
   geom_bar(stat = "identity", color="white", size=0.15) +
   scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
@@ -1095,6 +1099,10 @@ ggplot(data = df_mi_front_end_analytic_county_adj,
       fill = "Adjudications per 10k Youth") +
     coord_flip() +
   guides(fill = guide_legend(reverse = FALSE)) 
+
+front_end_adjudication_rate_per_county
+
+ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Work Products\\r_viz\\front_end_ppt_03_12\\front_end_adjudication_rate_per_county.png", front_end_adjudication_rate_per_county, width = 8, height = 6)
 ```
 
 <br>
