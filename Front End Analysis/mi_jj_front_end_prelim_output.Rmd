@@ -110,7 +110,6 @@ df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_fil
 
 <br><br>
 
-<br><br>
 
 ## Trends over Time, 2016-2020
 
@@ -525,7 +524,7 @@ quantiles <- df_mi_front_end_analytic_county %>%
   as.vector() 
 
 ### make labels youth pop
-label_petition_rate <- c("289 to 418","238 to 289","179 to 238", "85 to 179")
+label_petition_rate <- c("325 to 437","284 to 325","210 to 284", "85 to 210")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county %<>%
@@ -545,7 +544,7 @@ ggplot(data = df_mi_front_end_analytic_county,
   scale_y_continuous(limits=c(min(0), 
                                            max(450))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 15, y = 360, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 385, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
@@ -560,6 +559,34 @@ ggplot(data = df_mi_front_end_analytic_county,
       fill = "Petitions per 10k Youth") +
     coord_flip() +
   guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br>
+
+### Distribution of County Youth Population by Petition Rate Quartile
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### plot county population size
+ggplot(data = df_mi_front_end_analytic_county,
+            mapping = aes(x = reorder(county_anonymous, petitions_per_10k_youth), y = overall_10_16_population, fill = petitions_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color="white", size=0.15) +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(labels = scales::comma_format()) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  # annotate("text", x = 15, y = 360, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = "Overall Youth Population Estimate (N)", x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Petitions per 10k Youth") +
+    coord_flip() +
+  guides(fill = FALSE) 
 ```
 
 <br><br>
@@ -1033,7 +1060,7 @@ quantiles <- df_mi_front_end_analytic_county_adj %>%
   as.vector() 
 
 ### make labels youth pop
-label_adj_rate <- c("108 to 179","82 to 108","49 to 82", "0 to 49")
+label_adj_rate <- c("134 to 194","111 to 134","59 to 111", "0 to 59")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county_adj %<>%
@@ -1053,7 +1080,7 @@ ggplot(data = df_mi_front_end_analytic_county_adj,
   scale_y_continuous(limits=c(min(0), 
                                            max(200))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 15, y = 150, label = "Each bar represents one county's\n adjudication rate", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 165, label = "Each bar represents one county's\n adjudication rate", colour = "#00475d", size = 4) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
@@ -1068,6 +1095,35 @@ ggplot(data = df_mi_front_end_analytic_county_adj,
       fill = "Adjudications per 10k Youth") +
     coord_flip() +
   guides(fill = guide_legend(reverse = FALSE)) 
+```
+
+<br>
+
+### Distribution of County Youth Population by Adjudication Rate Quartile
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+### plot county population size 
+ggplot(data = df_mi_front_end_analytic_county_adj,
+            mapping = aes(x = reorder(county_anonymous, adjudications_per_10k_youth), y = overall_10_16_population, fill = adjudication_per_10k_youth_quartile)) + 
+  geom_bar(stat = "identity", color="white", size=0.15) +
+  scale_fill_manual(values = c("#00475d","#007392","#0db4e4","#9ed4ef")) +
+  scale_y_continuous(labels = scales::comma_format()) +
+  scale_x_discrete(labels = scales::wrap_format(18)) +
+  # annotate("text", x = 15, y = 150, label = "Each bar represents one county's\n adjudication rate", colour = "#00475d", size = 4) +
+    theme(panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),
+          axis.line=element_blank(),
+          legend.position = "top",
+        legend.title.align=0.5,
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+    labs(y = "Overall Youth Population Estimate (N)",
+         x = NULL,
+      caption = NULL,
+      title = NULL,
+      subtitle = NULL,
+      fill = "Adjudications per 10k Youth") +
+    coord_flip() +
+  guides(fill = FALSE) 
 ```
 
 <br><br>
