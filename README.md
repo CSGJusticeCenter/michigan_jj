@@ -39,8 +39,11 @@ Sharepoint path to JC Research folder for Michigan JJ project: https://csgorg.sh
 │   │    |   ├── IV-E/
 │   │    |   |   ├── Analysis/
 │   │    |   |   |   ├── jj_mi_mdhhs_non_subsidy_iv_e.Rmd # clean/analyze iv-e financial data
-│   ├── Front End Analysis/           
-│   │    |   ├── mi_jj_front_end_prelim_output.Rmd # produce cross-tabs, preliminary descriptives on petitions/adjudications
+│   ├── Front End Analysis/
+│   │    |   ├── Tables/
+│   │    |   |   ├── mi_jj_front_end_prelim_output.Rmd # produce cross-tabs, preliminary descriptives on petitions/adjudications
+│   │    |   ├── Viz/
+│   │    |   |   ├── mi_jj_front_end_prelim_output_viz.Rmd # produce visuals for consent calendar and adjudication analysis
 │   ├── MDHHS/           
 │   │    |   ├── Analysis/
 │   │    |   |   |   ├── mdhhs_placement_incident_analysis.Rmd # prepare tables for mdhhs analysis
