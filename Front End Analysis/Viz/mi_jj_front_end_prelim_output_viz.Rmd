@@ -1,7 +1,7 @@
 ---
 title: "mi_front_end_prelim_adjudication_viz"
 author: "Andrew Byrum"
-date: "3/16/2022"
+date: "3/2022"
 output: html_document
 ---
 
@@ -17,7 +17,7 @@ libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer"
 MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/Final/Analytic Files")
 
 ### import final analytic file
-df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_file_v3.csv")) %>% 
+df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_file_v4.csv")) %>% 
   ### clean dates and add labels to vars we want to include in tables
   mutate(petition_date = mdy(petition_date),
          disp_date = mdy(disp_date),
@@ -163,7 +163,7 @@ kable(petition_count_year_table_combined_grouped, format.args = list(big.mark = 
 
 ```{r include=FALSE}
 ### set theme and font size
-theme_set(theme_minimal(20, base_family = "Calibri"))
+theme_set(theme_minimal(24, base_family = "Calibri"))
 
 ### disable scientific notation for viz
 options(scipen=999)
@@ -382,9 +382,6 @@ ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Docum
 
 ### Petitions per 10k youth by county, 2016-2019 (annual mean petitions per 10k youth, 10-16)
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
-### set theme for now
-theme_set(theme_minimal())
-
 ### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
 df_ezapop_race_ethnicity_10_16_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_16_race_eth_sex_mi.txt", delim = "|") %>% 
   mutate(county_name =  gsub(" County", "", county_name),
@@ -415,7 +412,7 @@ quantiles <- df_mi_front_end_analytic_county %>%
   as.vector() 
 
 ### make labels youth pop
-label_petition_rate <- c("325 to 437","284 to 325","210 to 284", "85 to 210")
+label_petition_rate <- c("323 to 437","283 to 323","210 to 283", "85 to 210")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county %<>%
@@ -492,6 +489,8 @@ ggplot(data = df_mi_front_end_analytic_county,
 
 ### Count/Proportion by Race/Ethnicity, 2016-2019
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
+df_mi_front_end_analytic_consent <- df_mi_front_end_analytic %>% 
+  filter(!is.na(cc_ind)==TRUE)
 
 petition_count_race_table_overall <- df_mi_front_end_analytic_consent %>% 
   filter(petition_year%in%c(2016,2017,2018,2019),
@@ -982,31 +981,8 @@ ggsave("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Docum
 
 Note: Petitions with Missing Adjudication data dropped from Adjudication/Non-Adjudication/Other %'s (8% of all petitions). Consent calendar petitions also dropped.
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
-# ### petitioned
-# petition_count_off_table_pet <- df_mi_front_end_analytic %>% 
-#   filter(petition_year%in%c(2016,2017,2018,2019),
-#          !is.na(off_lvl_pet)==TRUE) %>% 
-#   group_by(off_lvl_pet) %>% 
-#   summarise(`Petitions, Petitioned Offense (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
-#             `Adjudication, Petitioned Offense (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
-#             `Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
-#             `Non-Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
-#             `Other, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>% 
-#   ungroup() %>% 
-#   rename(off_lvl = off_lvl_pet)
-# 
-# petition_count_off_table_overall_pet <- df_mi_front_end_analytic %>% 
-#   filter(petition_year%in%c(2016,2017,2018,2019),
-#          !is.na(off_lvl_pet)==TRUE) %>% 
-#   summarise(`Petitions, Petitioned Offense (N)` = n_distinct(pet_id[!is.na(disp_desc)==TRUE]), 
-#             `Adjudication, Petitioned Offense (N)` = n_distinct(pet_id[disp_desc=="Adjudication"]),
-#             `Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
-#             `Non-Adjudication, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Non-Adjudication"])/`Petitions, Overall (N)`*100, digits = 1),
-#             `Other, Petitioned Offense (%)` = round(n_distinct(pet_id[disp_desc=="Other"])/`Petitions, Overall (N)`*100, digits = 1)) %>%  
-#   mutate(off_lvl = "Overall")
-# 
-# ### combine
-# petition_count_off_table_pet_combined <- rbind(petition_count_off_table_pet,petition_count_off_table_overall_pet)
+df_mi_front_end_analytic_adjudication <- df_mi_front_end_analytic %>% 
+  filter((cc_ind==0 | is.na(cc_ind)==TRUE) & disp_desc!="Missing")
 
 ### petitioned offense
 petition_count_off_table_overall_adj <- df_mi_front_end_analytic_adjudication %>% 
@@ -1413,7 +1389,7 @@ quantiles <- df_mi_front_end_analytic_county_adj %>%
   as.vector() 
 
 ### make labels youth pop
-label_adj_rate <- c("134 to 194","111 to 134","59 to 111", "0 to 59")
+label_adj_rate <- c("133 to 194","110 to 133","60 to 110", "0 to 60")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county_adj %<>%

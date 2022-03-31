@@ -39,7 +39,7 @@ MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/F
 #################################################################################################################
 
 # Original file has 17 variables + remove any pre-2016 petition rows
-PCS <- read_csv(file.path(MI_path, "PCS_petitions_v4.csv")) %>%
+PCS <- read_csv(file.path(MI_path, "PCS_petitions_v6.csv")) %>%
   mutate(temp_pet_date = mdy(petition_date)) %>% filter(temp_pet_date >= "2016-01-01") %>% select(-temp_pet_date)
 
 # pet_id_orig = all unique
@@ -225,7 +225,7 @@ Joined %>%
 #############################################################################################################
 
 ### write out as _v3 so as not to overwrite prior file with adjudication updates from PCS data
-write.csv(as.data.frame(Joined), file = file.path(MI_path, "MI_JJ_joined_file_v3.csv"), row.names = FALSE)
+write.csv(as.data.frame(Joined), file = file.path(MI_path, "MI_JJ_joined_file_v4.csv"), row.names = FALSE)
 
 
 

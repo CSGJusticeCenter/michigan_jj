@@ -17,7 +17,7 @@ libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer"
 MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Converted/Final/Analytic Files")
 
 ### import final analytic file
-df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_file_v3.csv")) %>% 
+df_mi_front_end_analytic <- read_csv(file = file.path(MI_path, "MI_JJ_joined_file_v4.csv")) %>% 
   ### clean dates and add labels to vars we want to include in tables
   mutate(petition_date = mdy(petition_date),
          disp_date = mdy(disp_date),
@@ -492,7 +492,7 @@ kable(petition_count_age_table_combined, format.args = list(big.mark = ","), ali
 ### Petitions per 10k youth by county, 2016-2019 (annual mean petitions per 10k youth, 10-16)
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### set theme for now
-theme_set(theme_minimal())
+# theme_set(theme_minimal())
 
 ### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
 df_ezapop_race_ethnicity_10_16_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_16_race_eth_sex_mi.txt", delim = "|") %>% 
@@ -524,7 +524,7 @@ quantiles <- df_mi_front_end_analytic_county %>%
   as.vector() 
 
 ### make labels youth pop
-label_petition_rate <- c("325 to 437","284 to 325","210 to 284", "85 to 210")
+label_petition_rate <- c("323 to 437","283 to 323","210 to 283", "85 to 210")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county %<>%
@@ -1064,7 +1064,7 @@ quantiles <- df_mi_front_end_analytic_county_adj %>%
   as.vector() 
 
 ### make labels youth pop
-label_adj_rate <- c("134 to 194","111 to 134","59 to 111", "0 to 59")
+label_adj_rate <- c("133 to 194","110 to 133","60 to 110", "0 to 60")
 
 ### create a new variable with the specified quantiles
 df_mi_front_end_analytic_county_adj %<>%
