@@ -432,7 +432,7 @@ front_end_petition_rate_per_county <- ggplot(data = df_mi_front_end_analytic_cou
   scale_y_continuous(limits=c(min(0), 
                                            max(450))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 15, y = 385, label = "Each bar represents one county's\n petition rate", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 385, label = "Each bar represents one county's\n petition rate\n(petitions per 10k youth)", colour = "#00475d", size = 4) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
@@ -444,7 +444,7 @@ front_end_petition_rate_per_county <- ggplot(data = df_mi_front_end_analytic_cou
       caption = NULL,
       title = NULL,
       subtitle = NULL,
-      fill = "Petitions per 10k Youth") +
+      fill = NULL) +
     coord_flip() +
   guides(fill = guide_legend(reverse = FALSE)) 
 
@@ -1409,7 +1409,7 @@ front_end_adjudication_rate_per_county <- ggplot(data = df_mi_front_end_analytic
   scale_y_continuous(limits=c(min(0), 
                                            max(200))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 15, y = 165, label = "Each bar represents one county's\n adjudication rate", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 165, label = "Each bar represents one county's\n adjudication rate\n(adjudications per 10k youth)", colour = "#00475d", size = 4) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
@@ -1421,7 +1421,7 @@ front_end_adjudication_rate_per_county <- ggplot(data = df_mi_front_end_analytic
       caption = NULL,
       title = NULL,
       subtitle = NULL,
-      fill = "Adjudications per 10k Youth") +
+      fill = NULL) +
     coord_flip() +
   guides(fill = guide_legend(reverse = FALSE)) 
 

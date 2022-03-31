@@ -492,7 +492,7 @@ kable(petition_count_age_table_combined, format.args = list(big.mark = ","), ali
 ### Petitions per 10k youth by county, 2016-2019 (annual mean petitions per 10k youth, 10-16)
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 ### set theme for now
-# theme_set(theme_minimal())
+theme_set(theme_minimal())
 
 ### import ezapop race/ethnicity data for 10-17 y/o michigan residents for rate calculation
 df_ezapop_race_ethnicity_10_16_county_level <- readr::read_delim("C:\\Users\\abyrum\\The Council of State Governments\\JC Research - Documents\\JC Research - JJ_Michigan - JJ_Michigan\\Data\\Ezapop\\ezapop_10_16_race_eth_sex_mi.txt", delim = "|") %>% 
