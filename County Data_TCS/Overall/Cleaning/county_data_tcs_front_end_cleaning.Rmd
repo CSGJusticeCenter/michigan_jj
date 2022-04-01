@@ -33,7 +33,6 @@ kable(mi_jj_front_end_shell, format.args = list(big.mark = ","), align=rep('c'))
                  row_label_position = "l") 
 ```
 
-
 <br><br>
 
 ## Cleaning Syntax

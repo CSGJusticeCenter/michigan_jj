@@ -1,5 +1,17 @@
 # michigan_jj
 
+## Project Description
+
+Michigan launched an IOYouth initiative in 2021 to develop data-driven recommendations to reform the state’s juvenile justice system. Michigan has one of the highest rates of detained youth in the country, especially for low-level, noncriminal behavior. CSG Justice Center staff will perform a comprehensive examination of the state’s juvenile justice system. This will involve data analysis as well as focus groups and interviews with key stakeholders, including youth and families most impacted by the system. The effort will be conducted under the direction of the bipartisan Task Force on Juvenile Justice Reform.
+
+## Assigned Research Staff
+
+Becky Cohen, Emily Rogers, Andrew Byrum, Josh Mallett (joined 2/2022), Rachael Druckhammer (joined 2/2022), Amund Tallaksen (joined 2/2022)
+
+## Teams/SharePoint project folder links
+
+Sharepoint path to JC Research folder for Michigan JJ project: https://csgorg.sharepoint.com/:f:/s/Team-JC-Research/EoGjsT6a1bRJm53JzJD6zlIBydiIFUYURvvt2B-LF4k2tA?e=mQf2vh
+
 ## Repository Structure
 
 ```
@@ -27,6 +39,11 @@
 │   │    |   ├── IV-E/
 │   │    |   |   ├── Analysis/
 │   │    |   |   |   ├── jj_mi_mdhhs_non_subsidy_iv_e.Rmd # clean/analyze iv-e financial data
+│   ├── Front End Analysis/
+│   │    |   ├── Tables/
+│   │    |   |   ├── mi_jj_front_end_prelim_output.Rmd # produce cross-tabs, preliminary descriptives on petitions/adjudications
+│   │    |   ├── Viz/
+│   │    |   |   ├── mi_jj_front_end_prelim_output_viz.Rmd # produce visuals for consent calendar and adjudication analysis
 │   ├── MDHHS/           
 │   │    |   ├── Analysis/
 │   │    |   |   |   ├── mdhhs_placement_incident_analysis.Rmd # prepare tables for mdhhs analysis
@@ -38,7 +55,13 @@
 │   │    |   |   |   ├── michigan_jj_placement_data_mapping.Rmd # create data file diagram w/ relationships
 │   │    |   ├── Data Viz/
 │   │    |   |   |   ├── mdhhs_placement_viz.Rmd # syntax for mdhhs viz for ppt
+│   ├── Misc/           
+│   │    |   ├── example_line_plot_indiana_jj.Rmd # example syntax to plot change in referrals/petitions over time for reference
+│   ├── county_lookup/           
+│   │    |   ├── ezapop_jj_base_data_clean_sas.rmd # syntax to create county-level juvenile population estimates
 |
+|
+├── .gitignore  
 ├── Join_analytic_files.R  # join standardized data from kalamazoo, wayne, tcs, and pcs for front end analysis
 ├── MI_JJ_crosstabs.R  # cross tab syntax for front end analysis with analytic file
 └── README.md

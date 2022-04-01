@@ -1,0 +1,135 @@
+---
+title: "mi_tcs_violation_data_exploration"
+author: "Andrew Byrum"
+date: "3/23/2022"
+output: html_document
+---
+
+```{r include=FALSE}
+### call libraries
+library(easypackages)
+libraries("tidyverse","foreign","lubridate","reshape2", "ggplot2","RColorBrewer","knitr","forcats","openxlsx","statar","svDialogs","xlsx", "magrittr","stringr", "data.table","janitor","kableExtra","leaflet", "readr", "rmarkdown","rowr", "gganimate", "gifski","tidycensus","sf","htmltools","acs","tigris","mapview","rgeos", "ggrepel", "censusxy","gdata","lavaan","mclust","tmap","scales", "raster","rgeos","gmapsdistance","viridis","cowplot","lintr","leaflet.extras","censusapi","data.table","gridGraphics","readxl","haven","ggridges","extrafont","extrafontdb","datamodelr","Lahman","DiagrammeR","fs","readxl","rsvg","V8","ragg","ggtext","tidylog","csgjcr","psych")
+````
+
+
+```{r include=FALSE}
+### 1. Read in Pertinent TCS Files for Placement Analysis: 'cases' and 'mandatory events'
+
+### set sharepoint path using csgjcr::csg_sp_path function
+sharepoint_tcs_data_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/Raw/Courts/JIS/TCS")
+
+### import cases
+tcs_cases <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_Cases_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+
+
+### import mandatory events 
+tcs_mandatory_events <- read_xlsx(
+  file.path(
+    sharepoint_tcs_data_path, "TCS_MandatoryEvents_A.xlsx"),
+  .name_repair = make_clean_names
+  ) %>%
+  mutate(across(where(is.POSIXct), as.Date))
+```
+
+
+```{r include=FALSE}
+######################################
+#### cases
+######################################
+
+# de-dup cases file -- there is a very slight discrepancy in N size when de-duping by only juvenile_nbr and case_number as opposed to also including one or more of the above dates; keeping as juvenile_nbr and case_number makes most intuitive sense pending confirmation from JIS contacts (also de-duping by offense_dt as we may need this for later joins...)
+tcs_cases_de_dup <- tcs_cases %>%
+  filter(!is.na(juvenile_nbr)==TRUE,
+         juvenile_nbr!=0, ### there are a handful of records where juvenile_nbr=0; appears to be data error as the records don't consistently share other identifying info like dates and county
+         !is.na(case_number)==TRUE,
+         caseload_action == "NW FILE") %>% 
+  dplyr::rename(case_id = case_number) %>%  ### there are a number of important primary keys which have different names across the files -- here case_id and case_number are the same ID (naming all 'case_id')
+  distinct(juvenile_nbr,case_id,court_type,case_file_dt,tc_sreport_court_jcl,case_type,.keep_all = TRUE) %>% 
+  mutate(year = as.numeric(year),
+         case_year = as.numeric(year)) %>%
+    mutate(county_name_clean = word(tc_sreport_courtname, 1),
+         county_name_clean = str_to_title(county_name_clean),
+         county_name_clean = str_to_title(county_name_clean),
+         case_file_year = year(ymd(case_file_dt))) %>%
+  mutate(case_id_real_unique = paste0(juvenile_nbr,case_id,court_type,case_file_dt,tc_sreport_court_jcl,case_type)) 
+```
+
+<br>
+
+### Clean and de-duplicate `mandatory events` table
+```{r message=FALSE,warning=FALSE}
+######################################
+#### tcs_mandatory_events
+######################################
+mandatory_events_probation_violation <- c("VIOLATION OF PROBATION"
+,"PROBATION REVOKED"
+,"PROBATION VIOLATION HEARING"
+,"PROBATION VIOLATION SENTENCE")
+
+mandatory_events_consent_calendar_violation <- c("VIOLATION OF CONSENT CALENDAR"
+,"VIOLATION OF CONSENT CALENDAR/DIVERSION")
+
+tcs_mandatory_events_de_dup <- tcs_mandatory_events %>% 
+    filter(!is.na(case_id)==TRUE,
+         !is.na(id)==TRUE) %>% 
+  distinct(case_id,court_type,year,tc_sreport_court_jcl,case_year,case_type,.keep_all = TRUE) %>% 
+  mutate(violation_prob_ind = ifelse(event_desc %in% mandatory_events_probation_violation,1,0),
+         violation_cnst_ind = ifelse(event_desc %in% mandatory_events_consent_calendar_violation,1,0),
+         # year = as.numeric(year),
+         case_year = as.numeric(case_year)) %>%  
+  filter(violation_prob_ind==1 | violation_cnst_ind==1) %>% ### create flag for probation violation hearing and consent calendar violation hearing; note that this is a flag for the presence of a violation hearing in the events data table, not necessarily an adjudicated violation/actual violation (PCS data doesn't have this additional data so we decided to simply code violation hearings for consistency between tcs and pcs)); will need to recode later to align with analytic shell
+  dplyr::select(case_id,court_type,tc_sreport_court_jcl,case_year,case_type,violation_prob_ind,violation_cnst_ind)
+```
+
+<br><br>
+
+### Count of Violation of Probation/Consent Calendar Violations/Violation Hearings in RAW `Mandatory Events` file BEFORE joining to the `cases` table (which is our base sample for analysis and reduces the count of violations)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+tcs_mandatory_events_de_dup_table <- tcs_mandatory_events_de_dup %>% 
+  # # filter(case_year%in%c(2016,2017,2018,2019)) %>% 
+  # mutate(event_id = paste0(case_id,court_type,tc_sreport_court_jcl,case_year,case_type,violation_prob_ind,violation_cnst_ind)) %>% 
+  summarise(`Violations, Probation (N)` = sum(violation_prob_ind==1), 
+            `Violations, Consent Calendar (N)` = sum(violation_cnst_ind==1))
+
+### print table via kableextra
+kable(tcs_mandatory_events_de_dup_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+<br><br>
+
+
+#### Join cleaned `cases` to `mandatory events` for violation hearing data (as you can see in the output below, only 160 records from the `mandatory events` table match to the `cases` table -- which includes duplicates)
+
+Note: I've tried different joining columns, including joining only on `case_id`, with only a fluctuation of 6 additional cases being joined (and perhaps incorrectly joined).
+
+<br>
+
+Currently joining on: "case_id","court_type","tc_sreport_court_jcl", and "case_type"
+```{r warning=FALSE}
+### join tcs_mandatory_events_de_dup to add violation_prob_ind and violation_cnst_ind flags to petition-level data
+tcs_placements_cases_de_dup_events <- left_join(tcs_cases_de_dup,tcs_mandatory_events_de_dup,by=c("case_id","court_type","tc_sreport_court_jcl","case_type")) 
+```
+
+<br><br>
+
+### Count of Violation of Probation/Consent Calendar Hearings after Join (de-duping by petition but not accounting for adjudication status or year of petition -- which further reduces sample size in our analysis)
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+petition_count_year_table <- tcs_placements_cases_de_dup_events %>% 
+  filter(violation_prob_ind==1 | violation_cnst_ind==1) %>%
+  distinct(case_id_real_unique,.keep_all=TRUE) %>%
+  summarise(`Violations, Probation (N)` = n_distinct(case_id_real_unique[violation_prob_ind==1]), 
+            `Violations, Consent Calendar (N)` = n_distinct(case_id_real_unique[violation_cnst_ind==1])) 
+
+### print table via kableextra
+kable(petition_count_year_table, format.args = list(big.mark = ","), align=rep('c')) %>%
+   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                 row_label_position = "l") 
+```
+
+<br><br>
