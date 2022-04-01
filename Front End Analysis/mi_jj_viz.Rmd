@@ -1,0 +1,385 @@
+---
+title: "Michigan JJ visualizations"
+output: html_document
+---
+
+<br>
+<br>
+
+```{r include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+# packages / set.seed
+library(csgjcr)
+library(tidyverse)
+library(lubridate)
+library(tidycensus)
+library(Hmisc)
+library(kableExtra)
+set.seed(1234)
+library(ggrepel)
+
+# file path to analytic files
+MI_path <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Data/")
+
+MI_save <- csg_sp_path("JC Research - JJ_Michigan - JJ_Michigan/Work Products/r_viz/front_end_ppt_03_12")
+
+
+```
+
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+
+# Import the MI joined analytic file
+Michigan <- read_csv(file.path(MI_path, "Converted", "Final", "Analytic Files", "MI_JJ_joined_file_v4.csv"), show_col_types = FALSE)
+
+
+theme_set(theme_minimal(26, base_family = "Calibri"))
+
+jj_pal <- c("#00475d","#007392","#0db4e4","#9ed4ef","#d4e9f8")
+new_pal_five <- c("#d6df23","#007392","#eeed90","#0db4e4","#315c15")
+new_pal_six <- c("#7fc241","#d6df23","#007392","#eeed90","#0db4e4","#315c15")
+new_pal_blue_two <- c("#007392","#0db4e4")
+new_pal_blue_two_other <- c("#007392","#d6df23")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r petition-count-by-year, warning=FALSE, message=FALSE}
+
+MI_petitions <- Michigan %>%
+  mutate(petition_date = mdy(petition_date)) %>% mutate(petition_year = year(petition_date)) %>% filter(petition_year %in% c(2016,2017,2018,2019,2020)) %>%
+  group_by(petition_year) %>%
+  dplyr::summarize(cases = n(), .groups = "drop")
+
+
+# Line Plot
+
+MI_petitions_plot <- 
+  ggplot(data = MI_petitions, aes(x = petition_year, y = cases)) +
+  geom_line(color = "#007392", size = 2) + 
+  geom_point(color = "#007392", size = 4) + 
+  theme_minimal() + 
+  scale_y_continuous(label = scales::comma, limits = c(0, 11000)) + 
+  labs(y = "Number of Petitions", x = "Petition Year") +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        #panel.grid.major.x = element_blank(),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 16, face = "bold"),
+        #axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) +
+  geom_text(aes(x = petition_year, y = ifelse(cases > 6000, cases+575, cases-575), label = scales::comma(cases)), color = "#007392", size = 5.5)
+
+
+MI_petitions_plot
+  
+ 
+  
+
+#ggsave(file.path(MI_save,"MI_annual_petitions_plot.png"), MI_petitions_plot, width = 8, height = 6, bg = "white") 
+
+```
+
+
+<br>
+<br>
+
+```{r petitions-by-offense-category-2016-2019, warning=FALSE, message=FALSE}
+
+MI_off_petitions <- Michigan %>%
+  mutate(petition_date = mdy(petition_date)) %>% mutate(petition_year = year(petition_date)) %>% filter(petition_year %in% c(2016,2017,2018,2019)) %>%
+  filter(off_lvl_pet %nin% c(NA,"NA")) 
+
+MI_off_total_petitions <- MI_off_petitions%>%
+  mutate(total_petitions = nrow(.)) %>%
+  slice(1) %>%
+  pull(total_petitions)
+
+MI_off_petitions <- MI_off_petitions %>%
+  group_by(off_lvl_pet) %>%
+  dplyr::summarize(cases = n(), .groups = "drop") %>%
+  mutate(percent = cases / MI_off_total_petitions) %>%
+  mutate(offense = case_when(off_lvl_pet %in% 1 ~ "Felony,\nPerson",
+                             off_lvl_pet %in% 2 ~ "Felony,\nNon-Person",
+                             off_lvl_pet %in% 3 ~ "Misdemeanor,\nPerson",
+                             off_lvl_pet %in% 4 ~ "Misdemeanor,\nNon-Person",
+                             off_lvl_pet %in% 5 ~ "Status",
+                             off_lvl_pet %in% 6 ~ "Other")) %>%
+  mutate(offense = fct_relevel(offense, "Felony,\nPerson","Felony,\nNon-Person","Misdemeanor,\nPerson","Misdemeanor,\nNon-Person",
+                                   "Status","Other"))
+
+MI_off_petitions_plot_v1 <-
+  ggplot(data = MI_off_petitions, aes(x =  forcats::fct_rev(offense), y = percent, fill = offense)) +
+  geom_col() +
+  theme_minimal() + 
+  scale_y_continuous(labels = scales::percent, limits = c(0, .3)) +
+  scale_fill_manual(values = c("#eeed90","#d6df23","#7fc241","#315c15","#007392","#0db4e4")) +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 16, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  geom_label(aes(y = percent+.02, label = scales::percent(percent, accuracy = .1), fontface = "bold"),
+        size = 5, color = "gray40", fill = "white", show.legend = FALSE) +
+  coord_flip()
+
+
+MI_off_petitions_plot_v1
+
+
+
+
+
+MI_off_petitions_plot_v2 <-
+  ggplot(data = MI_off_petitions, aes(x =  forcats::fct_rev(offense), y = percent, fill = offense)) +
+  geom_col() +
+  theme_minimal() + 
+  scale_y_continuous(labels = scales::percent, limits = c(0, .3)) +
+  scale_fill_manual(values = c("#007392","#007392","#007392","#007392","#007392","#007392")) +
+  theme(#panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        #panel.grid.major.y = element_blank(),
+        #panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  geom_label_repel(aes(label = scales::percent(percent, accuracy = .1)),
+                  size = 5,
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "gray40",
+                  box.padding = 0.25,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE) +
+  coord_flip()
+
+MI_off_petitions_plot_v2
+
+#ggsave(file.path(MI_save,"MI_annual_off_petitions_plot_v1.png"), MI_off_petitions_plot_v1, width = 8, height = 6, bg = "white") 
+ggsave(file.path(MI_save,"MI_annual_off_petitions_plot_v2.png"), MI_off_petitions_plot_v2, width = 8, height = 6, bg = "white") 
+
+  
+``` 
+  
+  
+
+
+
+
+```{r warning=FALSE, message=FALSE}
+
+
+MI_age_petitions <- Michigan %>%
+  mutate(petition_date = mdy(petition_date)) %>% mutate(petition_year = year(petition_date)) %>% filter(petition_year %in% c(2016,2017,2018,2019)) %>%
+  filter(age %nin% c(NA,"NA")) 
+
+
+MI_age_total_petitions <- MI_age_petitions%>%
+  mutate(total_petitions = nrow(.)) %>%
+  slice(1) %>%
+  pull(total_petitions)
+
+
+MI_age_petitions <- MI_age_petitions %>%
+  mutate(age_category = case_when(age <= 10 ~ "10 and under",
+                                  age %in% c(11,12) ~ "11 to 12",
+                                  age %in% c(13,14,15,16) ~ "13 to 16",
+                                  age > 16 ~ "17+")) %>%
+  group_by(age_category) %>%
+  dplyr::summarize(cases = n(), .groups = "drop") %>%
+  mutate(percent = cases / MI_age_total_petitions) 
+
+MI_age_petitions_plot <-
+  ggplot(data = MI_age_petitions, aes(x =  forcats::fct_rev(age_category), y = percent, fill = age_category)) +
+  geom_col() +
+  theme_minimal() + 
+  scale_fill_manual(values = c("#007392","#007392","#007392","#007392")) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, .95)) +
+  theme(#panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        #panel.grid.major.y = element_blank(),
+        #panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  geom_label_repel(aes(label = scales::percent(percent, accuracy = .1)),
+                  size = 5,
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "gray40",
+                  box.padding = 0.25,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE) +
+
+  coord_flip()
+
+
+MI_age_petitions_plot  
+
+#ggsave(file.path(MI_save,"MI_age_petitions_plot_v1.png"), MI_age_petitions_plot, width = 8, height = 6, bg = "white") 
+
+  
+
+
+```
+
+
+
+```{r warning=FALSE,message=FALSE}
+
+
+MI_race_petitions <- Michigan %>%
+  mutate(petition_date = mdy(petition_date)) %>% mutate(petition_year = year(petition_date)) %>% filter(petition_year %in% c(2016,2017,2018,2019)) %>%
+  filter(race_ethnic %nin% c(NA,"NA"))
+
+
+MI_race_total_petitions <- MI_race_petitions%>%
+  mutate(total_petitions = nrow(.)) %>%
+  slice(1) %>%
+  pull(total_petitions)
+
+MI_race_petitions <- MI_race_petitions %>%
+  group_by(race_ethnic) %>%
+  dplyr::summarize(cases = n(), .groups = "drop") %>%
+  mutate(percent = cases / MI_race_total_petitions) %>%
+  mutate(race = case_when(race_ethnic %in% 1 ~ "White",
+                          race_ethnic %in% 2 ~ "Black",
+                          race_ethnic %in% 3 ~ "Hispanic",
+                          race_ethnic %in% 4 ~ "American\n Indian/Alaska\n Native",
+                          race_ethnic %in% 5 ~ "Asian/Pacific\n Islander",
+                          race_ethnic %in% 6 ~ "Multiracial",
+                          race_ethnic %in% 7 ~ "Other")) %>%
+  mutate(race = fct_relevel(race,"American\n Indian/Alaska\n Native","Asian/Pacific\n Islander","Black","Hispanic","Multiracial","White","Other"))
+
+
+MI_race_petitions_plot_v1 <-
+  ggplot(data = MI_race_petitions, aes(x = forcats::fct_rev(race), y = percent, fill = race)) +
+  geom_col() +
+  theme_minimal() + 
+  scale_fill_manual(values = c("#007392","#007392","#007392","#007392","#007392","#007392","#007392")) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.7)) +
+  theme(#panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        #panel.grid.major.y = element_blank(),
+        #panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  geom_label_repel(aes(y = percent, label = scales::percent(percent, accuracy = .1)), fontface = "bold",
+        size = 5, color = "gray40", fill = "white", show.legend = FALSE, direction = 'x', hjust = 0.75,
+        box.padding = 0.25, label.padding = 0.5) +
+  coord_flip()
+
+
+
+
+MI_race_petitions_plot_v1
+
+#ggsave(file.path(MI_save,"MI_race_petitions_plot_v1.png"), MI_race_petitions_plot_v1, width = 8, height = 6, bg = "white") 
+
+  
+```
+
+
+
+
+
+```{r, warning=FALSE, message=FALSE}
+
+# VOPs by offense category and overall 2016-2019
+
+MI_VOP <- Michigan %>%
+  mutate(petition_date = mdy(petition_date)) %>% mutate(petition_year = year(petition_date)) %>% filter(petition_year %in% c(2016,2017,2018,2019)) %>%
+  filter(violation_prob_ind == 1) %>%
+  filter(file_src == 3) %>%
+  filter(off_lvl_disp %nin% c(NA,"NA"))
+
+MI_VOP_total_petitions <- MI_VOP %>%
+  mutate(total_petitions = nrow(.)) %>%
+  slice(1) %>%
+  pull(total_petitions)
+
+
+MI_VOP <- MI_VOP %>%
+  group_by(off_lvl_disp) %>%
+  dplyr::summarize(cases = n(), .groups = "drop") %>%
+  mutate(percent = cases / MI_VOP_total_petitions) %>%
+  mutate(offense = case_when(off_lvl_disp %in% 1 ~ "Felony,\nPerson",
+                             off_lvl_disp %in% 2 ~ "Felony,\nNon-Person",
+                             off_lvl_disp %in% 3 ~ "Misdemeanor,\nPerson",
+                             off_lvl_disp %in% 4 ~ "Misdemeanor,\nNon-Person",
+                             off_lvl_disp %in% 5 ~ "Status",
+                             off_lvl_disp %in% 6 ~ "Other",
+                             off_lvl_disp %in% 7 ~ "No Adj. Offense")) %>%
+  mutate(offense = fct_relevel(offense, "Felony,\nPerson","Felony,\nNon-Person","Misdemeanor,\nPerson","Misdemeanor,\nNon-Person",
+                                   "Status","Other"))
+
+```
+
+
+```{r}
+
+MI_VOP_plot_v1 <-
+  ggplot(data = MI_VOP, aes(x =  forcats::fct_rev(offense), y = percent, fill = offense)) +
+  geom_col() +
+  theme_minimal() + 
+  scale_fill_manual(values = c("#007392","#007392","#007392","#007392","#007392","#007392")) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.35)) +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        #panel.grid.major.y = element_blank(),
+        #panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  geom_label_repel(aes(label = scales::percent(percent, accuracy = .1)),
+                  size = 5,
+                  direction = 'x',
+                  hjust = 0.75,
+                  label.padding = 0.5,
+                  fill = "white",
+                  color = "gray40",
+                  box.padding = 0.25,
+                  fontface = "bold",
+                  na.rm = TRUE,
+                  show.legend = FALSE) +
+  coord_flip()
+
+MI_VOP_plot_v1
+
+
+#ggsave(file.path(MI_save,"MI_VOP_plot_v1.png"), MI_VOP_plot_v1, width = 8, height = 6, bg = "white") 
+
+```
