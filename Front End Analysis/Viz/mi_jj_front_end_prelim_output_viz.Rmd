@@ -163,7 +163,7 @@ kable(petition_count_year_table_combined_grouped, format.args = list(big.mark = 
 
 ```{r include=FALSE}
 ### set theme and font size
-theme_set(theme_minimal(24, base_family = "Calibri"))
+theme_set(theme_minimal(26, base_family = "Calibri"))
 
 ### disable scientific notation for viz
 options(scipen=999)
@@ -222,7 +222,7 @@ adjudication_percent_pcs_tcs_only_with_consent_calendar <- ggplot(data = petitio
       fontface = "bold"
     ),
     position = position_stack(vjust = .5),
-    size = 4,
+    size = 6,
     colour = "black",
     fill = "white",
     show.legend = FALSE
@@ -237,7 +237,7 @@ adjudication_percent_pcs_tcs_only_with_consent_calendar <- ggplot(data = petitio
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5),
         plot.caption = element_text(hjust = 0.5),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16),
         axis.text.x = element_blank(),
         axis.ticks.length = unit(0, "cm"),
         panel.grid.major.y = element_blank(),
@@ -280,7 +280,7 @@ consent_calendar_petition_percent_over_time_tcs_pcs <- ggplot(data = petition_co
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -290,6 +290,7 @@ consent_calendar_petition_percent_over_time_tcs_pcs <- ggplot(data = petition_co
   guides(fill = FALSE) + 
   geom_label_repel(aes(label = percent(`Consent Calendar`, accuracy = .1)),
                   direction = 'x',
+                  size = 5,
                   hjust = 0.75,
                   label.padding = 0.5,
                   fill = "white",
@@ -346,7 +347,7 @@ adjudication_percent_all_data_sources_no_consent <- ggplot(data = petition_count
       fontface = "bold"
     ),
     position = position_stack(vjust = .5),
-    size = 4,
+    size = 6,
     colour = "black",
     fill = "white",
     show.legend = FALSE
@@ -361,7 +362,7 @@ adjudication_percent_all_data_sources_no_consent <- ggplot(data = petition_count
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5),
         plot.caption = element_text(hjust = 0.5),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12),
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16),
         axis.text.x = element_blank(),
         axis.ticks.length = unit(0, "cm"),
         panel.grid.major.y = element_blank(),
@@ -432,7 +433,7 @@ front_end_petition_rate_per_county <- ggplot(data = df_mi_front_end_analytic_cou
   scale_y_continuous(limits=c(min(0), 
                                            max(450))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 15, y = 385, label = "Each bar represents one county's\n petition rate\n(petitions per 10k youth)", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 395, label = "Each bar represents\none county's petition rate\n(petitions per 10k youth)", colour = "#00475d", size = 5) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
@@ -561,7 +562,7 @@ consent_calendar_race_ethnicity_row_percent_tcs_pcs <- ggplot(data = petition_co
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -571,6 +572,7 @@ consent_calendar_race_ethnicity_row_percent_tcs_pcs <- ggplot(data = petition_co
   guides(fill = FALSE) + 
   geom_label_repel(aes(label = percent(`Petitions, Consent Calendar (Row %)`, accuracy = .1)),
                   direction = 'x',
+                  size = 5,
                   hjust = 0.75,
                   label.padding = 0.5,
                   fill = "white",
@@ -625,7 +627,7 @@ consent_calendar_race_ethnicity_column_percent_tcs_pcs <- ggplot(data = petition
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -636,6 +638,7 @@ consent_calendar_race_ethnicity_column_percent_tcs_pcs <- ggplot(data = petition
   geom_label_repel(aes(label = percent(`Petitions, Consent Calendar (Column %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -724,7 +727,7 @@ consent_calendar_offense_row_percent_other_missing_exclude_pcs_tcs <- ggplot(dat
   scale_x_discrete(labels = scales::wrap_format(7)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -735,6 +738,7 @@ consent_calendar_offense_row_percent_other_missing_exclude_pcs_tcs <- ggplot(dat
   geom_label_repel(aes(label = percent(`Petitions, Consent Calendar (Row %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -791,7 +795,7 @@ consent_calendar_offense_column_percent_other_missing_exclude_pcs_tcs <- ggplot(
   scale_x_discrete(labels = scales::wrap_format(7)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -802,6 +806,7 @@ consent_calendar_offense_column_percent_other_missing_exclude_pcs_tcs <- ggplot(
   geom_label_repel(aes(label = percent(`Petitions, Consent Calendar (Column %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -885,7 +890,7 @@ consent_calendar_age_row_percent_missing_exclude_pcs_tcs <- ggplot(data = petiti
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -896,6 +901,7 @@ consent_calendar_age_row_percent_missing_exclude_pcs_tcs <- ggplot(data = petiti
   geom_label_repel(aes(label = percent(`Petitions, Consent Calendar (Row %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -945,7 +951,7 @@ consent_calendar_age_column_percent_missing_exclude_pcs_tcs <- ggplot(data = pet
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -955,6 +961,7 @@ consent_calendar_age_column_percent_missing_exclude_pcs_tcs <- ggplot(data = pet
   guides(fill = FALSE) + 
   geom_label_repel(aes(label = percent(`Petitions, Consent Calendar (Column %)`, accuracy = .1)),
                   direction = 'x',
+                  size = 5,
                   hjust = 0.75,
                   label.padding = 0.5,
                   fill = "white",
@@ -1087,7 +1094,7 @@ adjudication_offense_column_percent_other_missing_excluded <- ggplot(data = peti
   scale_x_discrete(labels = scales::wrap_format(7)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -1098,6 +1105,7 @@ adjudication_offense_column_percent_other_missing_excluded <- ggplot(data = peti
   geom_label_repel(aes(label = percent(`Adjudication (Column %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -1151,7 +1159,7 @@ adjudication_offense_row_percent_other_missing_excluded <- ggplot(data = petitio
   scale_x_discrete(labels = scales::wrap_format(7)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -1162,6 +1170,7 @@ adjudication_offense_row_percent_other_missing_excluded <- ggplot(data = petitio
   geom_label_repel(aes(label = percent(`Adjudication (Row %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -1260,7 +1269,7 @@ adjudication_age_row_percent_missing_excluded <- ggplot(data = petition_count_ag
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -1271,6 +1280,7 @@ adjudication_age_row_percent_missing_excluded <- ggplot(data = petition_count_ag
   geom_label_repel(aes(label = percent(`Adjudication (Row %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -1337,7 +1347,7 @@ adjudication_age_column_percent_missing_excluded <- ggplot(data = petition_count
   scale_x_discrete(labels = scales::wrap_format(18)) +
   # annotate("text", x = 4, y = .2, label = "Each bar represents the % of detentions for status offenses\nwithin one county", colour = "#00475d", size = 4) +
     theme(strip.text.x = element_text(face = "bold"),
-        axis.text.y = element_text(face = "bold", hjust = 1, size = 12)) +
+        axis.text.y = element_text(face = "bold", hjust = 1, size = 16)) +
     labs(y = NULL, x = NULL,
     caption = NULL,
     title = NULL,
@@ -1348,6 +1358,7 @@ adjudication_age_column_percent_missing_excluded <- ggplot(data = petition_count
   geom_label_repel(aes(label = percent(`Adjudication (Column %)`, accuracy = .1)),
                   direction = 'x',
                   hjust = 0.75,
+                  size = 5,
                   label.padding = 0.5,
                   fill = "white",
                   color = "gray40",
@@ -1409,7 +1420,7 @@ front_end_adjudication_rate_per_county <- ggplot(data = df_mi_front_end_analytic
   scale_y_continuous(limits=c(min(0), 
                                            max(200))) +
   scale_x_discrete(labels = scales::wrap_format(18)) +
-  annotate("text", x = 15, y = 165, label = "Each bar represents one county's\n adjudication rate\n(adjudications per 10k youth)", colour = "#00475d", size = 4) +
+  annotate("text", x = 15, y = 165, label = "Each bar represents\none county's adjudication rate\n(adjudications per 10k youth)", colour = "#00475d", size = 5) +
     theme(panel.grid.major = element_blank(),
           # panel.grid.minor = element_blank(),
           axis.line=element_blank(),
